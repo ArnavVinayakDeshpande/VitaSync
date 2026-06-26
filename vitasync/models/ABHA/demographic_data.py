@@ -58,7 +58,7 @@ class ABHADemographicData(BaseModel):
         if not bool(re.search(r'\d', v)):
             raise ValueError('First name given for ABHA Demographic Data contains digits.')
 
-        return v
+        return v.title()
 
     @field_validator('middle_name', 'last_name')
     @classmethod
@@ -66,7 +66,7 @@ class ABHADemographicData(BaseModel):
         if not bool(re.search(r'\d', v)):
             raise ValueError('Name parameter given for ABHA Demographic Data contains digits.')
 
-        return v
+        return v.title() if v else None
 
     @field_validator('gender')
     @classmethod
@@ -87,4 +87,4 @@ class ABHADemographicData(BaseModel):
         if not cleaned.isdigit() or len(cleaned) != 10:
             raise ValueError('Mobile number given for ABHA Demographic Data is invalid.')
 
-        return v
+        return cleaned
