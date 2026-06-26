@@ -15,16 +15,16 @@ from pydantic import (
 from vitasync.models.ABHA.kyc import ABHAKYC
 
 
-def validate_patient_id(pid: str):
+def validate_patient_id(pid: str) -> str:
     ID_LENGTH: int = 6
     l = len(pid)
     
     if l != ID_LENGTH:
-        return ValueError(f'Patient ID has an invalid length, expected: {ID_LENGTH} got: {l}.')
+        raise ValueError(f'Patient ID has an invalid length, expected: {ID_LENGTH} got: {l}.')
 
     # Custom validating logic
     if re.search(r'\d', pid) is not None:
-        return ValueError('Patient ID contains digits, which is an invalid format.')
+        raise ValueError('Patient ID contains digits, which is an invalid format.')
 
     return pid
 
