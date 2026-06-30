@@ -13,6 +13,7 @@ from pydantic import (
 )
 
 from vitasync.models.ABHA.kyc import ABHAKYC
+from vitasync.common.converter import concatenate_name
 
 
 def validate_patient_id(pid: str) -> str:
@@ -46,16 +47,16 @@ class Patient(BaseModel):
     )
     mobile_number: str = Field(
         '',
-        alias='phoneNumber',
+        alias='mobileNumber',
         description=''
     )
-    date_of_birth: date | None = Field(
+    date_of_birth: datetime | None = Field(
         None,
         alias='dob',
         description=''
     )
-    conditions: list[MedicalCondition] = Field(
-        default_factory=list,
+    conditions: set[MedicalCondition] = Field(
+        default_factory=set,
         alias='medicalConditions',
         description=''
     )
@@ -87,9 +88,9 @@ class Patient(BaseModel):
             if self.abha_kyc is None:
                 raise ValueError('No name given to Patient, no ABHA KYC present to fetch the name.')
 
-            self.name = (
-                self.abha_kyc.demographic_data.first_name +
-                self.abha_kyc.demographic_data.middle_name + 
+            self.name = concatenate_name(
+                self.abha_kyc.demographic_data.first_name,
+                self.abha_kyc.demographic_data.middle_name,
                 self.abha_kyc.demographic_data.last_name
             )
 
@@ -106,11 +107,11 @@ class Patient(BaseModel):
                 self.abha_kyc.demographic_data.last_name and
                 self.abha_kyc.demographic_data.last_name not in self.name
             ):
-                self.name = (
-                self.abha_kyc.demographic_data.first_name +
-                self.abha_kyc.demographic_data.middle_name + 
-                self.abha_kyc.demographic_data.last_name
-            )
+                self.name = concatenate_name(
+                    self.abha_kyc.demographic_data.first_name,
+                    self.abha_kyc.demographic_data.middle_name,
+                    self.abha_kyc.demographic_data.last_name
+                )
 
         # Mobile number
         if not self.mobile_number:
@@ -139,9 +140,9 @@ class Patient(BaseModel):
 
     @property
     def abha_name(self) -> str | None:
-        return (
-            self.abha_kyc.demographic_data.first_name + 
-            self.abha_kyc.demographic_data.middle_name + 
+        return concatenate_name(
+            self.abha_kyc.demographic_data.first_name,
+            self.abha_kyc.demographic_data.middle_name,
             self.abha_kyc.demographic_data.last_name
         ) if self.abha_kyc is not None else None
 

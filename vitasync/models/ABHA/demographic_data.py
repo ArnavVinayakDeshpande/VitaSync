@@ -1,7 +1,7 @@
 """
 """
 
-from datetime import date
+from datetime import datetime, date
 import re
 from pydantic import (
     BaseModel,
@@ -11,6 +11,7 @@ from pydantic import (
 )
 
 from vitasync.exceptions.generic import *
+from vitasync.models.ABHA.gender import Gender
 
 
 class ABHADemographicData(BaseModel):
@@ -22,30 +23,30 @@ class ABHADemographicData(BaseModel):
         description='Legal first name',
         min_length=1
     )
-    middle_name: str = Field(
-        '',
+    middle_name: str | None = Field(
+        default=None,
         alias='middleName',
         description='Optional middle name'
     )
-    last_name: str = Field(
-        '',
+    last_name: str | None = Field(
+        default=None,
         alias='lastName',
         description='Optional Legal Last Name'
     )
-    date_of_birth: date = Field(
+    date_of_birth: datetime = Field(
         ...,
         alias='dob',
         description='Parsed date of birth.'
     )
-    gender: str = Field(
+    gender: Gender = Field(
         ...,
         alias='gender',
         max_length=1,
-        description='M, F, or 0 identifier'
+        description='M, F, or O identifier'
     )
     mobile_number: str = Field(
         ...,
-        alias='mobile',
+        alias='mobileNumber',
         description='AADHAR-linked and registered mobile number'
     )
 
@@ -55,7 +56,7 @@ class ABHADemographicData(BaseModel):
         if not v:
             raise ValueError('First name given for ABHA Demographic Data is empty.')
 
-        if not bool(re.search(r'\d', v)):
+        if bool(re.search(r'\d', v)):
             raise ValueError('First name given for ABHA Demographic Data contains digits.')
 
         return v.title()
@@ -63,18 +64,18 @@ class ABHADemographicData(BaseModel):
     @field_validator('middle_name', 'last_name')
     @classmethod
     def validate_middle_and_last_name(cls, v):
-        if not bool(re.search(r'\d', v)):
+        if bool(re.search(r'\d', v)):
             raise ValueError('Name parameter given for ABHA Demographic Data contains digits.')
 
         return v.title() if v else None
 
-    @field_validator('gender')
+    @field_validator('date_of_birth')
     @classmethod
-    def validate_gender(cls, v):
-        if v.upper() not in ['M', 'F', '0']:
-            raise ValueError('Unknown gender given for ABHA Demographic Data.')
+    def validate_date_of_birth(cls, v):
+        if v.date() > date.today():
+            raise ValueError('Birth date given for ABHA Demographic Data is greater than current date.')
 
-        return v
+        return datetime.combine(v.date(), datetime.min.time())
 
     @field_validator('mobile_number')
     @classmethod

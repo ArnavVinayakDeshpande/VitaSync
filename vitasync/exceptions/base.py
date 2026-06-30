@@ -2,6 +2,6 @@
 """
 
 
-class VitaSyncBaseException(Exception):
+class VitaSyncBaseError(Exception):
     def __init__(self, msg) -> None:
         super().__init__(msg)

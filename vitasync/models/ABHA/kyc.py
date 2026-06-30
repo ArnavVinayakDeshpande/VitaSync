@@ -44,7 +44,7 @@ class ABHAKYC(BaseModel):
     @field_validator('abha_number')
     @classmethod
     def validate_abha_number(cls, v):
-        pattern = r'\d{2}[-| ]\d{4}[-| ]\d{4}[-| ]\d{4}'
+        pattern = r'^\d{2}[-| ]\d{4}[-| ]\d{4}[-| ]\d{4}$'
 
         if not bool(re.search(pattern, v)):
             raise ValueError('ABHA Number given in ABHA KYC is invalid.')
