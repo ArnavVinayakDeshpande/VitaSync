@@ -11,8 +11,8 @@ type ExternalDatabaseBaseError = PyMongoError
 class VitaSyncDatabaseDisconnectedError(VitaSyncBaseError):
     _MESSAGE = 'Failed to connect to database: {exc}.'
 
-    def __init__(self, exc: ExternalDatabaseBaseError) -> None:
-        super().__init__(self._MESSAGE.format(exc=exc))
+    def __init__(self, exc: ExternalDatabaseBaseError | None = None) -> None:
+        super().__init__(self._MESSAGE.format(exc=exc) if exc is not None else self._MESSAGE)
 
 class VitaSyncDatabaseExecutionError(VitaSyncBaseError):
     _MESSAGE = 'Ran into error while executing a database query: {exc}.'

@@ -311,44 +311,58 @@ class UpdateArgs(BaseModel):
 class PatientRepository:
     def __init__(self, collection: AsyncIOMotorCollection) -> None:
         self._collection = collection
+        self._initialized: bool = False
 
     @property
     def collection(self) -> AsyncIOMotorCollection:
         return self._collection
 
+    @property
+    def is_initialized(self) -> bool:
+        return self._initialized
+
     async def initialize(self) -> None:
-        # Create patient id index
-        await self._collection.create_index(
-            'pid',
-            unique=True
-        )
+        try:
+            # Create patient id index
+            await self._collection.create_index(
+                'pid',
+                unique=True
+            )
 
-        # Create mobile_number index
-        await self._collection.create_index(
-            'mobile_number',
-            unique=True
-        )
-        await self._collection.create_index(
-            'abha_kyc.demographic_data.mobile_number',
-            unique=True
-        )
+            # Create mobile_number index
+            await self._collection.create_index(
+                'mobile_number',
+                unique=True
+            )
+            await self._collection.create_index(
+                'abha_kyc.demographic_data.mobile_number',
+                unique=True
+            )
 
-        # Create abha number index
-        await self._collection.create_index(
-            'abha_kyc.abha_number',
-            unique=True
-        )
+            # Create abha number index
+            await self._collection.create_index(
+                'abha_kyc.abha_number',
+                unique=True
+            )
 
-        # Create abha address index
-        await self._collection.create_index(
-            'abha_kyc.abha_address',
-            unique=True
-        )
+            # Create abha address index
+            await self._collection.create_index(
+                'abha_kyc.abha_address',
+                unique=True
+            )
+
+        except PyMongoError as exc:
+            raise VitaSyncDatabaseExecutionError(exc) from exc
+
+        self._initialized = True
 
     async def create(
         self,
         patient: Patient
     ) -> None:
+        if not self._initialized:
+            raise VitaSyncDatabaseDisconnectedError()
+
         try:
             await self._collection.insert_one(
                 patient.model_dump()
@@ -364,6 +378,9 @@ class PatientRepository:
         self,
         pid: str
     ):
+        if not self._initialized:
+            raise VitaSyncDatabaseDisconnectedError()
+
         try:
             response = await self._collection.delete_one(
                 {
@@ -382,6 +399,9 @@ class PatientRepository:
         updateargs: UpdateArgs
     ) -> None:
         # TODO Validation
+
+        if not self._initialized:
+            raise VitaSyncDatabaseDisconnectedError()
 
         updater = {
             '$set': {
@@ -460,6 +480,12 @@ class PatientRepository:
         self,
         pid: str
     ) -> Patient | None:
+        if not self._initialized:
+            raise VitaSyncDatabaseDisconnectedError()
+
+        if not pid:
+            return
+
         try:
             response = await self._collection.find_one(
                 {
@@ -487,6 +513,9 @@ class PatientRepository:
         abha_kyc_exists: bool | None = None,
         abha_kyc: ABHAKYCGetAllArgs | None = None
     ) -> list[Patient]:
+        if not self._initialized:
+            raise VitaSyncDatabaseDisconnectedError()
+
         size = size if size >= 0 else 0
         offset = offset if offset >= 0 else 0
 
@@ -582,6 +611,9 @@ class PatientRepository:
         abha_kyc: bool = False,
         created_on: bool = False
     ) -> GetFieldsResult | None:
+        if not self._initialized:
+            raise VitaSyncDatabaseDisconnectedError()
+
         if not pid:
             return
 
@@ -619,6 +651,21 @@ class PatientRepository:
         abha_address: str | None = None,
         abha_mobile_number: str | None = None
     ) -> str | None:
+        if not self._initialized:
+            raise VitaSyncDatabaseDisconnectedError()
+
+        if not (
+            any(
+                [
+                    mobile_number,
+                    abha_number,
+                    abha_address,
+                    abha_mobile_number
+                ]
+            )
+        ):
+            raise VitaSyncInvalidInputsError(['getpid'], 'Need atleast some sort of identifcation to fetch pid.')
+
         try:
             response = await self._collection.find_one(
                 {
