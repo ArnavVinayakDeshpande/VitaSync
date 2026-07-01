@@ -14,22 +14,22 @@ class ABHAStructuralAddress(BaseModel):
 
     raw_address: str | None = Field(
         None,
-        alias='address',
+        serialization_alias='address',
         description='Full unparsed raw address.'
     )
     district: str = Field(
         ...,
-        alias='disctrictName',
+        serialization_alias='disctrictName',
         description='Verified district name.'
     )
     state: str = Field(
         ...,
-        alias='stateName',
+        serialization_alias='stateName',
         description='Verified state name.'
     )
     pincode: str = Field(
         ...,
-        alias='pinCode',
+        serialization_alias='pinCode',
         description='6-digit localized and verified postal code.',
         min_length=6,
         max_length=6

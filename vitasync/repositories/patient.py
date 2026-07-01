@@ -22,9 +22,9 @@ from vitasync.exceptions.database import *
 from vitasync.exceptions.generic import VitaSyncDataValidationError, VitaSyncInvalidInputsError
 from vitasync.models.patient import (
     MedicalCondition,
-    Patient,
-    validate_patient_id as validate_pid
+    Patient
 )
+from vitasync.common.idgenerator import PatientID
 from vitasync.models.ABHA.kyc import ABHAKYC
 from vitasync.models.ABHA.status import ABHAStatus
 from vitasync.models.ABHA.gender import Gender
@@ -42,12 +42,12 @@ class ConditionGetAllArgsCheckType(StrEnum):
 class ConditionGetAllArgs(BaseModel):
     conditions: set[MedicalCondition] = Field(
         ...,
-        alias='conditions',
+        serialization_alias='conditions',
         description=''
     )
     checktype: ConditionGetAllArgsCheckType = Field(
         default=ConditionGetAllArgsCheckType.CHECKALL,
-        alias='checkType',
+        serialization_alias='checkType',
         description=''
     )
 
@@ -62,22 +62,22 @@ class ConditionGetAllArgs(BaseModel):
 class ABHAKYCGetAllArgs(BaseModel):
     abha_status: ABHAStatus | None = Field(
         default=None,
-        alias='abhaStatus',
+        serialization_alias='abhaStatus',
         description=''
     )
     has_middle_name: bool | None = Field(
         default=None,
-        alias='hasMiddleName',
+        serialization_alias='hasMiddleName',
         description=''
     )
     has_last_name: bool | None = Field(
         default=None,
-        alias='hasLastName',
+        serialization_alias='hasLastName',
         description=''
     )
     gender: Gender | None = Field(
         default=None,
-        alias='gender',
+        serialization_alias='gender',
         description=''
     )
 
@@ -86,42 +86,42 @@ class GetFieldsResult(BaseModel):
 
     pid: str = Field(
         ...,
-        alias='patientID',
+        serialization_alias='patientID',
         description=''
     )
     name: str | None = Field(
-        alias='patientName',
+        serialization_alias='patientName',
         default=None,
         description=''
     )
     mobile_number: str | None = Field(
         default=None,
-        alias='mobileNumber',
+        serialization_alias='mobileNumber',
         description=''
     )
     date_of_birth: datetime | None = Field(
         default=None,
-        alias='dob',
+        serialization_alias='dob',
         description=''
     )
     conditions: list[MedicalCondition] | None = Field(
         default=None,
-        alias='medicalConditions',
+        serialization_alias='medicalConditions',
         description=''
     )
     is_active: bool | None = Field(
         default=None,
-        alias='isActive',
+        serialization_alias='isActive',
         description=''
     )
     abha_kyc: ABHAKYC | None = Field(
         default=None,
-        alias='abhaKYC',
+        serialization_alias='abhaKYC',
         description=''
     )
     created_on: datetime | None = Field(
         default=None,
-        alias='createdOn',
+        serialization_alias='createdOn',
         description=''
     )
 
@@ -133,94 +133,94 @@ class ConditionUpdateArgsUpdateType(StrEnum):
 class ConditionUpdateArgs(BaseModel):
     conditions: set[MedicalCondition] = Field(
         ...,
-        alias='medicalConditions',
+        serialization_alias='medicalConditions',
         description=''
     )
     updatetype: ConditionUpdateArgsUpdateType = Field(
         default=ConditionUpdateArgsUpdateType.APPEND,
-        alias='updateType',
+        serialization_alias='updateType',
         description=''
     )
 
 class ABHAKYCUpdateArgs(BaseModel):
     abha_number: str | None = Field(
         default=None,
-        alias='abhaNumber',
+        serialization_alias='abhaNumber',
         description=''
     )
     abha_address: str | None = Field(
         default=None,
-        alias='abhaAddress',
+        serialization_alias='abhaAddress',
         description=''
     )
     abha_status: ABHAStatus | None = Field(
         default=None,
-        alias='abhaStatus',
+        serialization_alias='abhaStatus',
         description=''
     )
     first_name: str | None = Field(
         default=None,
-        alias='firstName',
+        serialization_alias='firstName',
         description=''
     )
     set_middle_name: bool = Field(
         default=False,
-        alias='setMiddleName',
+        serialization_alias='setMiddleName',
         description=''
     )
     middle_name: str | None = Field(
         default=None,
-        alias='middleName',
+        serialization_alias='middleName',
         description=''
     )
     set_last_name: bool = Field(
         default=False,
-        alias='setLastName',
+        serialization_alias='setLastName',
         description=''
     )
     last_name: str | None = Field(
         default=None,
-        alias='lastName',
+        serialization_alias='lastName',
         description=''
     )
     date_of_birth: datetime | None = Field(
         default=None,
-        alias='dob',
+        serialization_alias='dob',
         description=''
     )
     gender: Gender | None = Field(
         default=None,
-        alias='gender',
+        serialization_alias='gender',
         description=''
     )
     mobile_number: str | None = Field(
         default=None,
-        alias='mobileNumber',
+        serialization_alias='mobileNumber',
         description=''
     )
     set_address: bool = Field(
         default=False,
-        alias='setAddress',
+        serialization_alias='setAddress',
         description=''
     )
     address: str | None = Field(
         default=None,
-        alias='address',
+        serialization_alias='address',
         description=''
     )
     district: str | None = Field(
         default=None,
-        alias='district',
+        serialization_alias='district',
         description=''
     )
     state: str | None = Field(
         default=None,
-        alias='state',
+        serialization_alias='state',
         description=''
     )
     pincode: str | None = Field(
         default=None,
-        alias='pinCode',
+        serialization_alias='pinCode',
         description=''
     )
 
@@ -259,44 +259,44 @@ class UpdateArgs(BaseModel):
 
     pid: str = Field(
         ...,
-        alias='patientID',
+        serialization_alias='patientID',
         description=''
     )
     name: str | None = Field(
         default=None,
-        alias='patientName',
+        serialization_alias='patientName',
         description=''
     )
     mobile_number: str | None = Field(
         default=None,
-        alias='mobileNumber',
+        serialization_alias='mobileNumber',
         description=''
     )
     date_of_birth: datetime | None = Field(
         default=None,
-        alias='dob',
+        serialization_alias='dob',
         description=''
     )
     conditions: ConditionUpdateArgs | None = Field(
         default=None,
-        alias='medicalConditions',
+        serialization_alias='medicalConditions',
         description=''
     )
     is_active: bool | None = Field(
         default=None,
-        alias='isActive',
+        serialization_alias='isActive',
         description=''
     )
     abha_kyc: ABHAKYCUpdateArgs | None = Field(
         default=None,
-        alias='abhaKYC',
+        serialization_alias='abhaKYC',
         description=''
     )
 
     @field_validator('pid')
     @classmethod
     def validate_patient_id(cls, v):
-        return validate_pid(v)
+        return PatientID.validate(v)
 
     @field_validator('name')
     @classmethod
@@ -377,7 +377,7 @@ class PatientRepository:
     async def delete(
         self,
         pid: str
-    ):
+    ) -> None:
         if not self._initialized:
             raise VitaSyncDatabaseDisconnectedError()
 

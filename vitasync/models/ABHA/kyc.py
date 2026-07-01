@@ -20,19 +20,19 @@ class ABHAKYC(BaseModel):
 
     abha_number: str = Field(
         ...,
-        alias='ABHANumber',
+        serialization_alias='ABHANumber',
         description='14-digit hyphenated ABHA number.',
         min_length=14,
         max_length=17
     )
     abha_address: str = Field(
         ...,
-        alias='phrAddress',
+        serialization_alias='phrAddress',
         description=''
     )
     abha_status: ABHAStatus = Field(
         ABHAStatus.ACTIVE,
-        alias='abhaStatus',
+        serialization_alias='abhaStatus',
         description=''
     )  
     demographic_data: ABHADemographicData = Field(...)

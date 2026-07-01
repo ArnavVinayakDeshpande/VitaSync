@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from vitasync.database.mongodb_client import AsyncMongoDBClient
 from vitasync.database.mongodb_db import AsyncMongoDBDatabase
+import vitasync.managers.patient as PM
 
 # Load the environment files
 load_dotenv()
@@ -35,6 +36,10 @@ async def lifespan(app: FastAPI):
 
     # Initialize the patient repository
     await mongodb_db.patient_repository.initialize()
+    # TODO Push this in database.init
+
+    # Initialize managers
+    PM.patient_manager = PM.PatientManager(mongodb_db.patient_repository)
 
     yield
 

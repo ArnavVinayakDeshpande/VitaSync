@@ -14,20 +14,8 @@ from pydantic import (
 
 from vitasync.models.ABHA.kyc import ABHAKYC
 from vitasync.common.converter import concatenate_name
+from vitasync.common.idgenerator import PatientID
 
-
-def validate_patient_id(pid: str) -> str:
-    ID_LENGTH: int = 6
-    l = len(pid)
-    
-    if l != ID_LENGTH:
-        raise ValueError(f'Patient ID has an invalid length, expected: {ID_LENGTH} got: {l}.')
-
-    # Custom validating logic
-    if re.search(r'\d', pid) is not None:
-        raise ValueError('Patient ID contains digits, which is an invalid format.')
-
-    return pid
 
 class MedicalCondition(StrEnum):
     PREGNANCY = auto()
@@ -37,49 +25,49 @@ class Patient(BaseModel):
 
     pid: str = Field(
         ...,
-        alias='patientID',
+        serialization_alias='patientID',
         description=''
     )
     name: str = Field(
         '',
-        alias='patientName',
+        serialization_alias='patientName',
         description=''
     )
     mobile_number: str = Field(
         '',
-        alias='mobileNumber',
+        serialization_alias='mobileNumber',
         description=''
     )
     date_of_birth: datetime | None = Field(
         None,
-        alias='dob',
+        serialization_alias='dob',
         description=''
     )
     conditions: set[MedicalCondition] = Field(
         default_factory=set,
-        alias='medicalConditions',
+        serialization_alias='medicalConditions',
         description=''
     )
     is_active: bool = Field(
         True,
-        alias='isActive',
+        serialization_alias='isActive',
         description=''
     )
     abha_kyc: ABHAKYC | None = Field(
         None,
-        alias='abhaKYC',
+        serialization_alias='abhaKYC',
         description=''
     )
     created_on: datetime = Field(
         default_factory=datetime.now,
-        alias='createdOn',
+        serialization_alias='createdOn',
         description=''
     )
 
     @field_validator('pid')
     @classmethod
     def validate_patient_id(cls, v):
-        return validate_patient_id(v)
+        return PatientID.validate(v)
 
     @model_validator(mode='after')
     def validate_model(self) -> 'Patient':
