@@ -30,7 +30,8 @@ from vitasync.models.ABHA.status import ABHAStatus
 from vitasync.models.ABHA.gender import Gender
 from vitasync.common.converter import (
     age_to_date_range,
-    date_to_datetime_range
+    date_to_datetime_range,
+    to_mongo_dict
 )
 import vitasync.common.validator as validator
 
@@ -336,19 +337,22 @@ class PatientRepository:
             )
             await self._collection.create_index(
                 'abha_kyc.demographic_data.mobile_number',
-                unique=True
+                unique=True,
+                sparse=True
             )
 
             # Create abha number index
             await self._collection.create_index(
                 'abha_kyc.abha_number',
-                unique=True
+                unique=True,
+                sparse=True
             )
 
             # Create abha address index
             await self._collection.create_index(
                 'abha_kyc.abha_address',
-                unique=True
+                unique=True,
+                sparse=True
             )
 
         except PyMongoError as exc:
@@ -365,7 +369,7 @@ class PatientRepository:
 
         try:
             await self._collection.insert_one(
-                patient.model_dump()
+                to_mongo_dict(patient)
             )
 
         except DuplicateKeyError as exc:

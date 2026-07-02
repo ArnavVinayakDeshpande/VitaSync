@@ -16,10 +16,57 @@ from vitasync.models.ABHA.kyc import ABHAKYC
 from vitasync.common.converter import concatenate_name
 from vitasync.common.idgenerator import PatientID
 
-
 class MedicalCondition(StrEnum):
+    # Obstetric Conditions
     PREGNANCY = auto()
+    HIGH_RISK_PREGNANCY = auto()
+    GESTATIONAL_DIABETES = auto()
+    PREECLAMPSIA = auto()
+    ECLAMPSIA = auto()
+    PLACENTA_PREVIA = auto()
+    PLACENTAL_ABRUPTION = auto()
+    PRETERM_LABOR = auto()
+    POSTPARTUM_HEMORRHAGE = auto()
+    ECTOPIC_PREGNANCY = auto()
+    MISCARRIAGE = auto()
+    STILLBIRTH = auto()
+    MULTIPLE_GESTATION = auto()        # twins, triplets etc.
+    HYPEREMESIS_GRAVIDARUM = auto()    # severe morning sickness
 
+    # Gynaecological Conditions
+    POLYCYSTIC_OVARY_SYNDROME = auto()
+    ENDOMETRIOSIS = auto()
+    UTERINE_FIBROIDS = auto()
+    CERVICAL_DYSPLASIA = auto()
+    OVARIAN_CYST = auto()
+    PELVIC_INFLAMMATORY_DISEASE = auto()
+    VULVODYNIA = auto()
+    MENORRHAGIA = auto()               # heavy menstrual bleeding
+    AMENORRHEA = auto()                # absence of menstruation
+    DYSMENORRHEA = auto()              # painful menstruation
+
+    # Neonatal Conditions
+    NEONATAL_JAUNDICE = auto()
+    NEONATAL_SEPSIS = auto()
+    LOW_BIRTH_WEIGHT = auto()
+    RESPIRATORY_DISTRESS_SYNDROME = auto()
+    NEONATAL_HYPOGLYCEMIA = auto()
+    CONGENITAL_HEART_DEFECT = auto()
+
+    # Chronic / Comorbid Conditions
+    HYPERTENSION = auto()
+    DIABETES_MELLITUS = auto()
+    ANEMIA = auto()
+    HYPOTHYROIDISM = auto()
+    HYPERTHYROIDISM = auto()
+    ASTHMA = auto()
+    EPILEPSY = auto()
+    DEPRESSION = auto()
+    ANXIETY = auto()
+    HIV = auto()
+    HEPATITIS_B = auto()
+    TUBERCULOSIS = auto()
+    
 class Patient(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

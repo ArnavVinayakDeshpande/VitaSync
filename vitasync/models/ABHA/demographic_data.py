@@ -64,10 +64,13 @@ class ABHADemographicData(BaseModel):
     @field_validator('middle_name', 'last_name')
     @classmethod
     def validate_middle_and_last_name(cls, v):
+        if not v:
+            return None
+
         if bool(re.search(r'\d', v)):
             raise ValueError('Name parameter given for ABHA Demographic Data contains digits.')
 
-        return v.title() if v else None
+        return v.title()
 
     @field_validator('date_of_birth')
     @classmethod

@@ -2,6 +2,7 @@
 """
 
 from pydantic import ValidationError
+from datetime import datetime
 
 from vitasync.exceptions.managers import VitaSyncManagersBaseError, VitaSyncPMDatabaseError
 from vitasync.repositories.patient import (
@@ -37,7 +38,13 @@ class PatientManager:
 
         for i in range(max_retries):
             try:
-                generated_id = PatientID.generate(patient_dict['created_on'])
+                created_on = patient_dict.get('created_on')
+                
+                if created_on is None:
+                    created_on = datetime.now()
+
+                generated_id = PatientID.generate(created_on)
+                print(f'ID generated: {generated_id}')
 
                 patient = Patient(
                     pid=generated_id,
@@ -48,8 +55,8 @@ class PatientManager:
 
                 return patient
 
-            except KeyError as exc:
-                raise VitaSyncInvalidInputsError(['patient::created_on'], f'created_on field in patient dict either does not exist or is not a valid datetime: {exc}.') from exc
+            # except KeyError as exc:
+            #     raise VitaSyncInvalidInputsError(['patient::created_on'], f'created_on field in patient dict either does not exist or is not a valid datetime: {exc}.') from exc
 
             except ValidationError as exc:
                 raise VitaSyncDataValidationError(exc) from exc

@@ -1,4 +1,4 @@
-"""
+r"""
 """
 
 from datetime import (
@@ -7,14 +7,6 @@ from datetime import (
     time,
     timedelta
 )
-
-from vitasync.models.ABHA.demographic_data import ABHADemographicData
-from vitasync.models.ABHA.structural_address import ABHAStructuralAddress
-from vitasync.models.ABHA.kyc import ABHAKYC
-from vitasync.models.patient import (
-    Patient
-)
-
 
 def concatenate_name(
     first_name: str,
@@ -44,8 +36,28 @@ def age_to_date_range(age: int) -> tuple[date, date] | None:
     
     return (youngest, oldest)
 
+def date_to_datetime(d: date) -> datetime:
+    return datetime.combine(d, time.min)
+
 def date_to_datetime_range(d: date) -> tuple[datetime, datetime]:
     start = datetime.combine(d, time.min)
     end = start + timedelta(days=1)
 
     return (start, end)
+
+def convert_types_to_mongodb_types(model_dict: dict) -> dict:
+    for key, value in model_dict.items():
+        if isinstance(value, set):
+            model_dict[key] = list(value)
+
+        if isinstance(value, date) and not isinstance(value, datetime):
+            model_dict[key] = date_to_datetime(value)
+
+        if isinstance(value, dict):
+            model_dict[key] = convert_types_to_mongodb_types(value)
+
+    return model_dict
+
+def to_mongo_dict(model) -> dict:
+    data = model.model_dump()
+    return convert_types_to_mongodb_types(data)

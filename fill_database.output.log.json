@@ -1,0 +1,7 @@
+{
+    "responses": [
+        "{\"pid\":\"PAT-260702-3R6JKA\",\"name\":\"Elango Usha\",\"mobile_number\":\"+917897908599\",\"date_of_birth\":\"1992-05-10T00:00:00\",\"conditions\":[\"pregnancy\",\"epilepsy\",\"anemia\",\"hepatitis_b\",\"multiple_gestation\",\"ectopic_pregnancy\",\"preterm_labor\",\"miscarriage\",\"preeclampsia\"],\"is_active\":true,\"abha_kyc\":null,\"created_on\":\"2026-07-02T15:56:33.042223\"}",
+        "{\"pid\":\"PAT-260702-9ATZCH\",\"name\":\"Vinitha Sangeetha Roy\",\"mobile_number\":\"08707256944\",\"date_of_birth\":\"1991-03-09T00:00:00\",\"conditions\":[\"stillbirth\",\"neonatal_jaundice\",\"pregnancy\",\"dysmenorrhea\",\"preterm_labor\"],\"is_active\":false,\"abha_kyc\":null,\"created_on\":\"2026-07-02T15:56:33.085251\"}"
+    ],
+    "exceptions": []
+}
