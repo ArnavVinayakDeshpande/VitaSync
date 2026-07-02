@@ -15,6 +15,7 @@ from pydantic import (
 from vitasync.models.ABHA.kyc import ABHAKYC
 from vitasync.common.converter import concatenate_name
 from vitasync.common.idgenerator import PatientID
+import vitasync.common.validator as validator
 
 class MedicalCondition(StrEnum):
     # Obstetric Conditions
@@ -191,3 +192,42 @@ class Patient(BaseModel):
 
         self.mobile_number = self.abha_kyc.demographic_data.mobile_number
         return True
+
+class PatientCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str = Field(
+        default='',
+        serialization_alias='patientName',
+        description=''
+    )
+    mobile_number: str = Field(
+        '',
+        serialization_alias='mobileNumber',
+        description=''
+    )
+    date_of_birth: datetime | None = Field(
+        None,
+        serialization_alias='dob',
+        description=''
+    )
+    conditions: set[MedicalCondition] = Field(
+        default_factory=set,
+        serialization_alias='medicalConditions',
+        description=''
+    )
+    is_active: bool = Field(
+        True,
+        serialization_alias='isActive',
+        description=''
+    )
+
+    @field_validator('mobile_number')
+    @classmethod
+    def validate_mobile_number(cls, v):
+        return validator.validate_mobile_number(v)
+
+    @field_validator('date_of_birth')
+    @classmethod
+    def validate_date_of_birth(cls, v):
+        return validator.validate_date_of_birth(v)
