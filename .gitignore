@@ -11,6 +11,7 @@
 # Matches __pycache__/ directories at any depth in the project tree.
 **/__pycache__/
 *.py[cod]
+*.pyc
 
 # Distribution / packaging artifacts
 *.egg-info/
