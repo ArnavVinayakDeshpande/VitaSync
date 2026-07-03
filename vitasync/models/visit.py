@@ -33,36 +33,43 @@ class Visit(BaseModel):
     vid: str = Field(
         ...,
         serialization_alias='visitID',
+        validation_alias='visitID',
         description=''
     )
     timestamp: datetime = Field(
         ...,
         serialization_alias='timeStamp',
+        validation_alias='timeStamp',
         description=''
     )
     prescriptions: list[Prescription] = Field(
         default_factory=list,
         serialization_alias='prescriptions',
+        validation_alias='prescriptions',
         description=''
     )
     notes: str = Field(
         '',
         serialization_alias='notes',
+        validation_alias='notes',
         description=''
     )
     fees_paid: float = Field(
         0,
         serialization_alias='feesPaid',
+        validation_alias='feesPaid',
         description=''
     )
     fees_pending: float = Field(
         0,
         serialization_alias='feesPending',
+        validation_alias='feesPending',
         description=''
     )
     vitals: Vitals | None = Field(
         None,
         serialization_alias='vitals',
+        validation_alias='vitals',
         description=''
     )
 

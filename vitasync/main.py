@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from vitasync.database.mongodb_client import AsyncMongoDBClient
 from vitasync.database.mongodb_db import AsyncMongoDBDatabase
 import vitasync.managers.patient as PM
+from vitasync.routers.patient import router as patient_router
 
 # Load the environment files
 load_dotenv()
@@ -60,7 +61,7 @@ app.add_middleware(
 )
 
 # include routers
-
+app.include_router(patient_router)
 
 @app.get('/')
 def root():

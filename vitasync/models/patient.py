@@ -74,41 +74,49 @@ class Patient(BaseModel):
     pid: str = Field(
         ...,
         serialization_alias='patientID',
+        validation_alias='patientID',
         description=''
     )
     name: str = Field(
         '',
         serialization_alias='patientName',
+        validation_alias='patientName',
         description=''
     )
     mobile_number: str = Field(
         '',
         serialization_alias='mobileNumber',
+        validation_alias='mobileNumber',
         description=''
     )
     date_of_birth: datetime | None = Field(
         None,
         serialization_alias='dob',
+        validation_alias='dob',
         description=''
     )
     conditions: set[MedicalCondition] = Field(
         default_factory=set,
         serialization_alias='medicalConditions',
+        validation_alias='medicalConditions',
         description=''
     )
     is_active: bool = Field(
         True,
         serialization_alias='isActive',
+        validation_alias='isActive',
         description=''
     )
     abha_kyc: ABHAKYC | None = Field(
         None,
         serialization_alias='abhaKYC',
+        validation_alias='abhaKYC',
         description=''
     )
     created_on: datetime = Field(
         default_factory=datetime.now,
         serialization_alias='createdOn',
+        validation_alias='createdOn',
         description=''
     )
 
@@ -199,26 +207,31 @@ class PatientCreate(BaseModel):
     name: str = Field(
         default='',
         serialization_alias='patientName',
+        validation_alias='patientName',
         description=''
     )
     mobile_number: str = Field(
         '',
         serialization_alias='mobileNumber',
+        validation_alias='mobileNumber',
         description=''
     )
     date_of_birth: datetime | None = Field(
         None,
         serialization_alias='dob',
+        validation_alias='dob',
         description=''
     )
     conditions: set[MedicalCondition] = Field(
         default_factory=set,
         serialization_alias='medicalConditions',
+        validation_alias='medicalConditions',
         description=''
     )
     is_active: bool = Field(
         True,
         serialization_alias='isActive',
+        validation_alias='isActive',
         description=''
     )
 

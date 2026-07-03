@@ -126,10 +126,11 @@ class PatientManager:
 
     async def update(
         self,
+        pid: str,
         updateargs: UpdateArgs
-    ):
+    ) -> None:
         try:
-            await self._repository.update(updateargs)
+            await self._repository.update(pid=pid, updateargs=updateargs)
 
         except VitaSyncDatabaseBaseError as exc:
             raise VitaSyncPMDatabaseError(exc) from exc

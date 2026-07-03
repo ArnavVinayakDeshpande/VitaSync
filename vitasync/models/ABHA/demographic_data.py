@@ -20,33 +20,39 @@ class ABHADemographicData(BaseModel):
     first_name: str = Field(
         ...,
         serialization_alias='firstName',
+        validation_alias='firstName',
         description='Legal first name',
         min_length=1
     )
     middle_name: str | None = Field(
         default=None,
         serialization_alias='middleName',
+        validation_alias='middleName',
         description='Optional middle name'
     )
     last_name: str | None = Field(
         default=None,
         serialization_alias='lastName',
+        validation_alias='lastName',
         description='Optional Legal Last Name'
     )
     date_of_birth: datetime = Field(
         ...,
         serialization_alias='dob',
+        validation_alias='dob',
         description='Parsed date of birth.'
     )
     gender: Gender = Field(
         ...,
         serialization_alias='gender',
+        validation_alias='gender',
         max_length=1,
         description='M, F, or O identifier'
     )
     mobile_number: str = Field(
         ...,
         serialization_alias='mobileNumber',
+        validation_alias='mobileNumber',
         description='AADHAR-linked and registered mobile number'
     )
 
