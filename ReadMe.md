@@ -2,204 +2,372 @@
 
 # VitaSync
 
-**Async clinical management backend for boutique maternity & neonatal care facilities.**  
-Built for India's ABDM ecosystem — ABHA, JANANI, HFR/HPR — with WhatsApp-native patient communication.
+**An asynchronous, ABDM-ready backend for boutique maternity, gynaecological, and neonatal healthcare facilities.**
+
+Designed with a layered architecture, strong data validation, and MongoDB-first persistence, VitaSync aims to provide a modern clinical management platform that integrates seamlessly with India's digital health ecosystem.
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB_Atlas-M2%2FM5-47A248?style=flat-square&logo=mongodb&logoColor=white)
-![ABDM](https://img.shields.io/badge/ABDM-JANANI%20Integrated-1565C0?style=flat-square)
+![FastAPI](https://img.shields.io/badge/FastAPI-Latest-009688?style=flat-square&logo=fastapi&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=flat-square&logo=mongodb&logoColor=white)
+![Pydantic](https://img.shields.io/badge/Pydantic-v2-E92063?style=flat-square)
 ![License](https://img.shields.io/badge/License-Proprietary-red?style=flat-square)
 
 </div>
 
 ---
 
-## Overview
+# Overview
 
-VitaSync is the backend engine for a specialized clinical management system designed for boutique maternity, gynaecological, and neonatal care facilities. It is built from the ground up as an async-first, ABDM-native system — not a generic HMS retrofitted for compliance.
+VitaSync is an asynchronous backend for a specialized Hospital Management System (HMS) developed specifically for boutique maternity, gynaecological, and neonatal care facilities.
 
-The system bridges the clinic's day-to-day workflows (patient registration, antenatal visit tracking, delivery records, postnatal followup) with India's national digital health infrastructure via the **JANANI** platform, with WhatsApp as the primary patient communication channel.
+Unlike traditional hospital management systems that are later adapted for government compliance, VitaSync is being designed from the ground up to operate within India's **Ayushman Bharat Digital Mission (ABDM)** ecosystem.
 
----
+The project emphasizes:
 
-## Core Features
-
-- **Patient & Visit Management** — Full async CRUD for patient demographics, antenatal checkups, delivery records, postnatal and neonatal visits
-- **ABDM Integration** — ABHA ID linking, HFR/HPR verification, consent management via the official NHA ABDM Wrapper microservice
-- **JANANI Protocol Support** — Longitudinal maternal tracking, QR-enabled digital MCH cards, automated high-risk pregnancy screening alerts, U-WIN immunization registry triggers
-- **WhatsApp Communication** — Template-based messaging, appointment reminders, delivery confirmations, and inbound webhook handling
-- **Webhook Server** — Inbound ABDM gateway callbacks and WhatsApp delivery receipt handling on the same FastAPI instance
-- **Role-aware API** — Endpoints designed for distinct clinic staff roles: receptionist, nurse, doctor
+- clean layered architecture
+- strongly typed business models
+- comprehensive validation
+- asynchronous database operations
+- modular service-oriented design
+- future integration with ABDM services and WhatsApp-based patient communication
 
 ---
 
-## Architecture
+# Current Project Status
+
+VitaSync is currently in active development.
+
+### Implemented
+
+- ✅ Async FastAPI backend
+- ✅ MongoDB integration
+- ✅ Repository pattern
+- ✅ Business logic layer (Managers)
+- ✅ Comprehensive Patient Management
+    - Create
+    - Read
+    - Update
+    - Delete
+    - Advanced filtering
+    - Field projection
+    - Patient ID lookup
+- ✅ Strong validation using Pydantic v2
+- ✅ Typed exception hierarchy
+- ✅ Automatic MongoDB index creation
+- ✅ ABHA data models
+- ✅ Extensive inline documentation (Doxygen)
+
+### In Progress
+
+- 🚧 Visit management
+- 🚧 Router expansion
+- 🚧 Authentication & authorization
+- 🚧 Additional repository modules
+
+### Planned
+
+- ABDM Wrapper integration
+- JANANI integration
+- WhatsApp communication
+- Appointment management
+- Clinical visit workflows
+- Practitioner management
+- Facility management
+- Audit logging
+- Role-based access control
+
+---
+
+# Architecture
+
+VitaSync follows a layered architecture where every layer has a single, well-defined responsibility.
 
 ```
-vitasync/                          ← Python package
-├── main.py                        # App entrypoint, lifespan, middleware
-├── common/                        # Config singleton, converters
-├── database/                      # Abstract DB client + MongoDB specialization
-├── repositories/                  # Per-collection async data access layer
-├── models/                        # Pydantic models (patient, visit, whatsapp)
-├── managers/                      # Business logic layer (router → manager → repo)
-├── routers/                       # FastAPI route definitions
-├── services/                      # ABDM wrapper client, JANANI service
-├── communications/                # WhatsApp async client + messenger/template services
-├── webhooks/                      # Inbound ABDM + WhatsApp webhook handlers
-├── exceptions/                    # Typed exception hierarchy
-├── middleware/                    # Auth + request logging
-├── utils/                         # Date arithmetic, ABHA validation, QR generation
-└── scripts/                       # Dev utilities: seed data, DB health checks
+                HTTP Request
+                     │
+                     ▼
+             FastAPI Router
+                     │
+                     ▼
+             Business Manager
+          (Business Logic Layer)
+                     │
+                     ▼
+              Repository Layer
+         (Database Abstraction)
+                     │
+                     ▼
+                 MongoDB
 ```
 
-### Request Flow
+This separation ensures that:
+
+- routers only handle HTTP concerns
+- managers implement business rules
+- repositories perform database operations
+- models validate and normalize data
+- the database remains an implementation detail
+
+---
+
+# Project Structure
 
 ```
-HTTP Request
+vitasync/
+│
+├── main.py                 # Application entry point
+│
+├── common/                 # Shared utilities and helpers
+│
+├── database/
+│   ├── base.py
+│   ├── mongodb_client.py
+│   └── mongodb_db.py
+│
+├── exceptions/             # Typed application exception hierarchy
+│
+├── managers/               # Business logic layer
+│
+├── models/                 # Pydantic domain models
+│
+├── repositories/           # MongoDB repositories
+│
+├── routers/                # FastAPI route definitions
+│
+└── ...
+```
+
+---
+
+# Design Principles
+
+The project follows several architectural principles throughout the codebase.
+
+## Layered Architecture
+
+Every layer has a single responsibility.
+
+| Layer | Responsibility |
+|--------|---------------|
+| Router | HTTP request/response handling |
+| Manager | Business logic |
+| Repository | Database operations |
+| Model | Validation & normalization |
+| Database | Persistent storage |
+
+---
+
+## Strong Typing
+
+Instead of passing raw dictionaries throughout the application, VitaSync models every business operation using strongly typed Pydantic models.
+
+Examples include:
+
+- Patient
+- PatientCreate
+- UpdateArgs
+- ConditionUpdateArgs
+- ABHAKYCUpdateArgs
+- ConditionGetAllArgs
+- ABHAKYCGetAllArgs
+- GetFieldsResult
+
+This improves readability, validation, maintainability, and IDE support.
+
+---
+
+## Validation Strategy
+
+Validation occurs at multiple layers.
+
+### Models
+
+Responsible for validating:
+
+- names
+- mobile numbers
+- dates
+- ABHA consistency
+- patient invariants
+
+### Managers
+
+Responsible for:
+
+- patient ID validation
+- retry logic
+- orchestration
+- business workflows
+
+### Repositories
+
+Responsible only for:
+
+- persistence
+- querying
+- MongoDB operations
+
+---
+
+## Exception Hierarchy
+
+The backend uses a strongly typed exception hierarchy.
+
+```
+Exception
     │
     ▼
-FastAPI Router
+VitaSyncBaseError
     │
-    ▼
-Manager  ──────────────────────► External Service
-(business logic)                 (ABDM Wrapper :8080)
-    │                            (WhatsApp API)
-    ▼
-Repository
-    │
-    ▼
-MongoDB Atlas (ap-south-1)
+    ├── Database Errors
+    ├── Manager Errors
+    └── Generic Errors
 ```
 
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Runtime | Python 3.12 |
-| Web Framework | FastAPI + Uvicorn |
-| Data Validation | Pydantic v2 |
-| Database | MongoDB Atlas (M2/M5, `ap-south-1`) |
-| DB Driver | PyMongo (async) |
-| ABDM Compliance | NHA ABDM Wrapper (SpringBoot microservice) |
-| HTTP Client | httpx (async) |
-| Containerization | Docker + Docker Compose |
+This allows infrastructure, business, and validation errors to remain clearly separated.
 
 ---
 
-## ABDM Compliance
+# Current Features
 
-VitaSync delegates all ABDM cryptographic operations — ECDH key exchange, JWE/JWS token handling, HIP/HIU flows, consent artifact management — to the official **[NHA ABDM Wrapper](https://github.com/NHA-ABDM/ABDM-wrapper)** microservice, which runs as a sidecar container. VitaSync communicates with the wrapper over the internal Docker network via a typed async HTTP client.
+## Patient Management
 
-This ensures:
-- VitaSync stays current with NHA specification updates without application-layer changes
-- Cryptographic operations remain outside the Python application boundary
-- Clear separation between clinical data (MongoDB Atlas) and consent/auth state (wrapper-managed)
+The backend currently supports complete asynchronous patient management, including:
 
----
+- patient creation
+- patient updates
+- patient deletion
+- patient retrieval
+- advanced filtering
+- selective field retrieval
+- patient identifier lookup
 
-## Government Integrations
-
-| Platform | Purpose |
-|---|---|
-| **ABHA** | Patient unique health identity (14-digit ID + ABHA address) |
-| **HFR** | Clinic's verified national facility identity |
-| **HPR** | Verified practitioner identity; required on all pushed clinical records |
-| **JANANI** | Maternal tracking, MCH card issuance, high-risk screening |
-| **U-WIN** | Immunization registry triggers post-delivery |
-| **UHI** | Unified Health Interface for service discovery |
+Patient information is validated before persistence, ensuring that records remain internally consistent.
 
 ---
 
-## Getting Started
+## ABHA Support
 
-### Prerequisites
+The project already includes comprehensive models representing ABHA information, including:
 
-- Docker + Docker Compose
-- Python 3.12 (for local development outside Docker)
-- MongoDB Atlas cluster (`ap-south-1` recommended for data localization)
-- NHA ABDM Wrapper credentials (HFR ID, client credentials)
+- demographic data
+- structural address
+- ABHA status
+- KYC information
 
-### Setup
+Patient records may optionally reference verified ABHA information, allowing automatic synchronization of demographic fields where appropriate.
+
+---
+
+# Technology Stack
+
+| Component | Technology |
+|------------|------------|
+| Language | Python 3.12 |
+| Web Framework | FastAPI |
+| Validation | Pydantic v2 |
+| Database | MongoDB |
+| Database Driver | Motor |
+| ASGI Server | Uvicorn |
+| Environment Configuration | python-dotenv |
+
+---
+
+# Getting Started
+
+## Prerequisites
+
+- Python 3.12+
+- MongoDB instance
+- Git
+
+---
+
+## Installation
+
+Clone the repository.
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/vitasync.git
+git clone "https://github.com/ArnavVinayakDeshpande/VitaSync"
 cd vitasync
-
-# Copy and configure environment variables
-cp .env.example .env
-# Edit .env with your MongoDB URI, ABDM credentials, WhatsApp tokens
-
-# Start the full stack (FastAPI + ABDM Wrapper)
-docker compose up --build
 ```
 
-The API will be available at `http://localhost:8000`.  
-Interactive docs (Swagger UI) at `http://localhost:8000/docs`.  
-ABDM Wrapper at `http://localhost:8080`.
-
-### Local Development (without Docker)
+Create a virtual environment.
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+```
+
+Activate it.
+
+### Linux/macOS
+
+```bash
+source .venv/bin/activate
+```
+
+### Windows
+
+```powershell
+.venv\Scripts\activate
+```
+
+Install dependencies.
+
+```bash
 pip install -r requirements.txt
+```
+
+Create a `.env` file.
+
+```env
+MONGODB_URI=<your-mongodb-connection-string>
+```
+
+Run the application.
+
+```bash
 uvicorn vitasync.main:app --reload
 ```
 
----
+The API will be available at
 
-## Branch Structure
+```
+http://localhost:8000
+```
 
-| Branch | Purpose |
-|---|---|
-| `main` | Production-ready. Protected. Never commit directly. |
-| `dev` | Integration branch. All features merge here first. |
-| `feature/*` | New functionality |
-| `fix/*` | Bug fixes |
-| `hotfix/*` | Critical production fixes — merges into both `main` and `dev` |
-| `chore/*` | Config, scripts, dependencies, documentation |
+Interactive documentation
 
----
-
-## Environment Variables
-
-See `.env.example` for the full reference. Key variables:
-
-```env
-# MongoDB
-MONGODB_URI=mongodb+srv://...
-MONGODB_DB_NAME=vitasync
-
-# ABDM Wrapper
-ABDM_WRAPPER_URL=http://abdm-wrapper:8080
-ABDM_CLIENT_ID=
-ABDM_CLIENT_SECRET=
-
-# WhatsApp
-WHATSAPP_API_URL=
-WHATSAPP_TOKEN=
-WHATSAPP_PHONE_NUMBER_ID=
-
-# App
-APP_ENV=development
-SECRET_KEY=
+```
+http://localhost:8000/docs
 ```
 
 ---
 
-## Data Localization
+# Roadmap
 
-All patient data is stored exclusively in MongoDB Atlas clusters provisioned in the `ap-south-1` (Mumbai) region, in compliance with India's data localization requirements under the Digital Personal Data Protection Act, 2023.
+The long-term vision for VitaSync includes:
+
+- ABDM Wrapper integration
+- ABHA authentication workflows
+- JANANI support
+- WhatsApp messaging
+- Visit management
+- Appointment scheduling
+- Clinical documentation
+- Digital MCH card support
+- Practitioner and facility management
+- Consent workflows
+- Role-based authentication
+- Audit logging
+- Analytics & reporting
 
 ---
 
-## License
+# License
 
-Proprietary. All rights reserved.  
-Built for **Lé Nest Hospitals — Neelam Nursing Home**, under the supervision of **Dr. Mukesh Gupta**.
+This project is proprietary software.
 
+All rights reserved.
+
+Developed for **Lé Nest Hospitals – Neelam Nursing Home** under the supervision of **Dr. Mukesh Gupta**.

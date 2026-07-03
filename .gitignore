@@ -1,0 +1,61 @@
+# ── VitaSync .gitignore ────────────────────────────────────────────────────────
+# Specifies intentionally untracked files that Git should ignore.
+# Covers Python artifacts, virtual environments, editor configs,
+# sensitive environment files, and development output logs.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+# ── Python ────────────────────────────────────────────────────────────────────
+
+# Byte-compiled / optimized / DLL files.
+# Matches __pycache__/ directories at any depth in the project tree.
+**/__pycache__/
+*.py[cod]
+*.pyc
+
+# Distribution / packaging artifacts
+*.egg-info/
+dist/
+build/
+
+
+# ── Virtual Environment ───────────────────────────────────────────────────────
+
+# Python virtual environment created via 'python -m venv .venv'.
+# Contains all installed dependencies — never committed since these
+# are fully reproducible from requirements.txt.
+.venv/
+
+
+# ── Environment & Secrets ─────────────────────────────────────────────────────
+
+# Local environment variable file containing secrets such as:
+# MONGODB_URI, ABDM credentials, WhatsApp API tokens.
+# .env.example (with placeholder values) IS committed as a reference.
+.env
+
+
+# ── Editor & IDE ──────────────────────────────────────────────────────────────
+
+# VSCode workspace settings and extensions config.
+# Each developer maintains their own local editor preferences.
+.vscode/
+
+# JetBrains IDEs (PyCharm etc.)
+.idea/
+
+
+# ── Design Files ──────────────────────────────────────────────────────────────
+
+# draw.io / Excalidraw architecture diagrams and UML designs.
+# Kept out of the main repo to avoid bloating version history
+# with large binary design files.
+designs/
+
+
+# ── Script Output & Logs ──────────────────────────────────────────────────────
+
+# JSON output log produced by the fill_database seed script.
+# Contains generated patient records and error reasons from seed runs.
+# Too large and environment-specific to be useful in version control.
+fill_database.output.log.json
