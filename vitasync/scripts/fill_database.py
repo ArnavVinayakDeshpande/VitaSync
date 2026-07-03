@@ -563,7 +563,7 @@ async def main():
             entry_label = f'Entry {i + 1}/{NUM_ENTRIES}'
             try:
                 pd = gen_patient()
-                response = await patient_manager.create(pd)
+                response = await patient_manager.create_unsafe(pd)
                 responses.append(response.model_dump_json())
                 print(
                     f'{Color.GREEN}[SEED]{Color.RESET} '

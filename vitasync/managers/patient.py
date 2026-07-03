@@ -15,7 +15,10 @@ from vitasync.repositories.patient import (
 from vitasync.exceptions.generic import VitaSyncDataValidationError, VitaSyncInvalidInputsError
 from vitasync.exceptions.database import VitaSyncDatabaseBaseError, VitaSyncDuplicateEntryError
 from vitasync.common.idgenerator import PatientID
-from vitasync.models.patient import Patient
+from vitasync.models.patient import (
+    Patient,
+    PatientCreate
+)
 
 
 class PatientManager:
@@ -31,24 +34,62 @@ class PatientManager:
 
     async def create(
         self,
-        patient_dict: dict,
+        patient_create: PatientCreate,
         max_retries: int = 5
     ) -> Patient:
         max_retries = max_retries if max_retries > 0 else 5
 
         for i in range(max_retries):
             try:
-                created_on = patient_dict.get('created_on')
-                
-                if created_on is None:
-                    created_on = datetime.now()
+                created_on = datetime.now()
 
                 generated_id = PatientID.generate(created_on)
                 print(f'ID generated: {generated_id}')
 
                 patient = Patient(
                     pid=generated_id,
-                    **patient_dict
+                    created_on=created_on,
+                    **patient_create.model_dump()
+                )
+
+                await self._repository.create(patient)
+
+                return patient
+
+            # except KeyError as exc:
+            #     raise VitaSyncInvalidInputsError(['patient::created_on'], f'created_on field in patient dict either does not exist or is not a valid datetime: {exc}.') from exc
+
+            except ValidationError as exc:
+                raise VitaSyncDataValidationError(exc) from exc
+
+            except VitaSyncDuplicateEntryError as exc:
+                if i == max_retries - 1:
+                    raise VitaSyncPMDatabaseError(exc) from exc # TODO Change database error to add pid duplication vs fields duplication
+                continue
+
+            except VitaSyncDatabaseBaseError as exc:
+                raise VitaSyncPMDatabaseError(exc) from exc
+
+        raise VitaSyncManagersBaseError(f'Unknown error occured, could not add patient even after retrying for: {max_retries}')
+
+    async def create_unsafe(
+        self,
+        patient_data: dict,
+        max_retries: int = 5
+    ) -> Patient:
+        max_retries = max_retries if max_retries > 0 else 5
+
+        for i in range(max_retries):
+            try:
+                created_on = datetime.now()
+
+                generated_id = PatientID.generate(created_on)
+                print(f'ID generated: {generated_id}')
+
+                patient = Patient(
+                    pid=generated_id,
+                    created_on=created_on,
+                    **patient_data
                 )
 
                 await self._repository.create(patient)
