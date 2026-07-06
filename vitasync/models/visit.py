@@ -1,31 +1,23 @@
 """
 """
 
-from datetime import datetime
-import re
 from pydantic import (
     BaseModel,
     Field,
     field_validator,
     ConfigDict
 )
+from datetime import datetime
 
-from vitasync.models.prescription import Prescription
+import vitasync.common.validator as validator
+from vitasync.common.idgenerator import (
+    PatientID, 
+    VisitID
+)
 from vitasync.models.vitals import Vitals
+from vitasync.models.prescription import Prescription
+from vitasync.models.diagnostic_report import DiagnosticReport
 
-
-def validate_visit_id(vid: str) -> str:
-    ID_LENGTH: int = 8
-    l = len(vid)
-
-    if l != ID_LENGTH:
-        raise ValueError(f'Visit ID has an invalid length, expected: {ID_LENGTH} got: {l}')
-
-    # Custom validating logic
-    if re.search(r'\d', vid) is not None:
-        raise ValueError('Visit ID contains digits, which is an invalid format.')
-
-    return vid
 
 class Visit(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -36,57 +28,99 @@ class Visit(BaseModel):
         validation_alias='visitID',
         description=''
     )
-    timestamp: datetime = Field(
+
+    pid: str = Field(
         ...,
-        serialization_alias='timeStamp',
-        validation_alias='timeStamp',
+        serialization_alias='patientID',
+        validation_alias='patientID',
         description=''
     )
+
+    timestamp: datetime = Field(
+        ...,
+        serialization_alias='timestamp',
+        validation_alias='timestamp',
+        description=''
+    )
+
+    attending_hpr_id: str = Field(
+        ...,
+        serialization_alias='attendingHPRID',
+        validation_alias='attendingHRPID',
+        description=''
+    )
+
+    fees_paid: float = Field(
+        default=0.0,
+        serialization_alias='feesPaid',
+        validation_alias='feesPaid',
+        description=''
+    )
+
+    fees_pending: float = Field(
+        default=0.0,
+        serialization_alias='feesPending',
+        validation_alias='feesPending',
+        description=''
+    )
+
+    notes: str = Field(
+        default='',
+        serialization_alias='notes',
+        validation_alias='notes',
+        description=''
+    )
+
+    vitals: Vitals | None = Field(
+        default=None,
+        serialization_alias='vitals',
+        validation_alias='vitals',
+        description=''
+    )
+
     prescriptions: list[Prescription] = Field(
         default_factory=list,
         serialization_alias='prescriptions',
         validation_alias='prescriptions',
         description=''
     )
-    notes: str = Field(
-        '',
-        serialization_alias='notes',
-        validation_alias='notes',
-        description=''
-    )
-    fees_paid: float = Field(
-        0,
-        serialization_alias='feesPaid',
-        validation_alias='feesPaid',
-        description=''
-    )
-    fees_pending: float = Field(
-        0,
-        serialization_alias='feesPending',
-        validation_alias='feesPending',
-        description=''
-    )
-    vitals: Vitals | None = Field(
-        None,
-        serialization_alias='vitals',
-        validation_alias='vitals',
+
+    diagnostics: list[DiagnosticReport] = Field(
+        default_factory=list,
+        serialization_alias='diagnostics',
+        validation_alias='diagnostics',
         description=''
     )
 
     @field_validator('vid')
     @classmethod
-    def validate_visit_id(cls, v):
-        return validate_visit_id(v)
+    def validate_vid(cls, v):
+        return VisitID.validate(v)
 
-    @field_validator('timestamp')
+    @field_validator('pid')
     @classmethod
-    def validate_timestamp(cls, v):
-        if v > datetime.now():
-            raise ValueError('Visit timestamp is greater than timestamp of "now". Cannot input timestamps of the future.')
-        return v
+    def validate_pid(cls, v):
+        return PatientID.validate(v)
+
+    @field_validator('attending_hpr_id')
+    @classmethod
+    def validate_attending_hpr_id(cls, v):
+        return validator.validate_hpr_id(v)
 
     @field_validator('fees_paid', 'fees_pending')
+    @classmethod
     def validate_fees(cls, v):
-        if v < 0:
-            raise ValueError('Fees of some kind (paid/pending) are less than zero, which is invalid.')
+        if v < 0.0:
+            raise ValueError('Fees paid or pending cannot be less than zero.')
+
         return v
+
+    @field_validator('prescriptions')
+    @classmethod
+    def validate_prescriptions(cls, v):
+        return v # TODO See if this requires any validation
+
+    @field_validator('diagnostics')
+    @classmethod
+    def validate_diagnostics(cls, v):
+        return v # TODO See if this requires any validation
