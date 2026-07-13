@@ -21,7 +21,6 @@ data persistence and retrieval to PatientRepository.
 from pydantic import ValidationError
 from datetime import datetime
 
-from vitasync.exceptions.managers import VitaSyncManagersBaseError, VitaSyncPMDatabaseError
 from vitasync.repositories.patient import (
     ConditionGetAllArgs,
     ABHAKYCGetAllArgs,
