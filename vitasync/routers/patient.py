@@ -3,17 +3,42 @@
 @brief FastAPI router defining all HTTP endpoints for patient-related operations.
 
 @details
-This router exposes the full patient management API for VitaSync, covering
-patient registration, retrieval, search, field projection, PID resolution,
-updates, and deletion. All routes delegate business logic to the PatientManager
-layer and never interact with the database directly.
+This router exposes the complete patient management API for VitaSync,
+including patient registration, retrieval, searching, field projection,
+PID resolution, partial updates, and deletion.
 
-All endpoints are prefixed with /patients and grouped under the 'Patients'
-tag in the auto-generated Swagger/OpenAPI documentation.
+The router is intentionally thin and contains no business logic. Every route
+delegates work to the PatientManager layer and is responsible only for:
 
-@note Route declaration order is intentional — static path segments (/search,
-      /resolve) are declared before dynamic path parameters (/{patientID}) to
-      prevent FastAPI from matching literal segments as path parameter values.
+  - Request validation performed by FastAPI/Pydantic.
+  - Dependency injection.
+  - Translating VitaSync exceptions into appropriate HTTP responses.
+  - Serialising response models for the client.
+
+All endpoints are prefixed with /patients and grouped under the "Patients"
+tag in the generated OpenAPI documentation.
+
+Exception Mapping
+──────────────────────────────────────────────────────────────────────────────
+
+Manager/Repository Exception                  HTTP Status
+──────────────────────────────────────────────────────────────────────────────
+VitaSyncNotFoundError                         404 Not Found
+VitaSyncInvalidInputsError                    400 Bad Request
+VitaSyncDuplicateEntryError                   409 Conflict
+VitaSyncDatabaseDisconnectedError             503 Service Unavailable
+VitaSyncDatabaseUnreachableError              503 Service Unavailable
+VitaSyncDatabaseTimeoutError                  504 Gateway Timeout
+VitaSyncDatabaseOperationError                500 Internal Server Error
+VitaSyncDatabaseExecutionError                500 Internal Server Error
+VitaSyncValidationError                       500 Internal Server Error
+VitaSyncIDGenerationError                     500 Internal Server Error
+Unhandled VitaSyncError                       500 Internal Server Error
+
+@note Route declaration order is intentional. Static paths such as
+      /search and /resolve are declared before dynamic path parameters
+      (/{patientID}) so FastAPI does not interpret literal path segments
+      as patient identifiers.
 """
 
 from fastapi import (
@@ -35,9 +60,7 @@ from vitasync.repositories.patient import (
     ABHAKYCGetAllArgs,
     UpdateArgs
 )
-from vitasync.exceptions.managers import VitaSyncPMDatabaseError, VitaSyncManagersBaseError
-from vitasync.exceptions.database import VitaSyncDuplicateEntryError
-from vitasync.exceptions.generic import VitaSyncInvalidInputsError
+from vitasync.common.error import *
 
 
 # ── Router ─────────────────────────────────────────────────────────────────────
@@ -52,60 +75,80 @@ router = APIRouter(
 
 class GetAllArgs(BaseModel):
     """
-    @brief Request body model for the POST /patients/search endpoint.
+    @brief Request model for POST /patients/search.
 
     @details
-    Encapsulates all filter, pagination, and search parameters for querying
-    the patient collection. All fields are optional — an empty body or omitted
-    body returns an unfiltered paginated list of patients.
+    Encapsulates every supported search, filtering, and pagination parameter
+    accepted by the patient search endpoint.
 
-    Supports both camelCase (from frontend JSON) and snake_case (from internal
-    Python code) via validation aliases and populate_by_name=True.
+    Every field is optional. When omitted, the endpoint performs an
+    unfiltered paginated query using the default pagination values.
+
+    The model accepts both camelCase and snake_case field names through
+    validation aliases while always exposing camelCase fields externally.
+
+    @note Validation constraints are intentionally limited to structural
+          validation. Business-rule validation is performed by the manager
+          layer and surfaced as VitaSyncInvalidInputsError.
     """
+
     model_config = ConfigDict(populate_by_name=True)
 
     size: int = Field(
         default=50,
         ge=0,
         validation_alias='size',
-        description='Maximum number of patient records to return. 0 returns all records with no limit.'
+        description=(
+            'Maximum number of patient records to return. '
+            'A value of 0 disables pagination and returns all matching records.'
+        )
     )
+
     offset: int = Field(
         default=0,
         ge=0,
         validation_alias='offset',
-        description='Number of records to skip before returning results. Used for pagination.'
+        description='Number of matching records to skip before returning results.'
     )
+
     name_search: str | None = Field(
         default=None,
         validation_alias='nameSearch',
-        description='Case-insensitive prefix search on patient name. Returns all patients whose name starts with this string.'
+        description='Case-insensitive prefix search on patient names.'
     )
-    condition_args: ConditionGetAllArgs | None = Field(
+
+    conditions: ConditionGetAllArgs | None = Field(
         default=None,
         validation_alias='conditionArgs',
-        description='Filter patients by medical conditions. Supports CHECKALL (must have all) and CHECKANY (must have at least one) modes.'
+        description=(
+            'Optional medical-condition filtering parameters supporting '
+            'CHECKALL and CHECKANY matching semantics.'
+        )
     )
+
     is_active: bool | None = Field(
         default=None,
         validation_alias='isActive',
-        description='Filter by patient active status. True returns only active patients, False returns only inactive. Omit to return both.'
+        description='Filters patients by active or inactive status.'
     )
+
     age: int | None = Field(
         default=None,
         ge=1,
         validation_alias='age',
-        description='Filter patients by exact age in years. Computes a date-of-birth range from the given age.'
+        description='Filters patients by exact age in completed years.'
     )
+
     abha_kyc_exists: bool | None = Field(
         default=None,
         validation_alias='abhaKYCExists',
-        description='Filter by whether ABHA KYC is linked. True returns only patients with KYC, False returns only patients without.'
+        description='Filters patients by whether ABHA KYC information exists.'
     )
+
     abha_kyc_args: ABHAKYCGetAllArgs | None = Field(
         default=None,
         validation_alias='abhaKYCArgs',
-        description='Filter patients by nested ABHA KYC attributes such as status, gender, and name completeness.'
+        description='Optional filters applied to nested ABHA KYC fields.'
     )
 
 
@@ -113,32 +156,33 @@ class GetAllArgs(BaseModel):
 
 def get_patient_manager() -> PatientManager:
     """
-    @brief FastAPI dependency that resolves and validates the PatientManager singleton.
+    @brief Returns the application's PatientManager singleton.
 
     @details
-    Checks that the module-level PatientManager singleton has been initialized
-    during application startup via the lifespan context manager. If the manager
-    is None (i.e. startup did not complete successfully), raises a 503 Service
-    Unavailable rather than a 500, since the server is technically running but
-    not ready to serve patient requests.
+    Validates that the PatientManager has been successfully initialised during
+    application startup before allowing any route to execute.
 
-    This dependency is injected into every route function via FastAPI's
-    Depends() mechanism, eliminating the need for repetitive None checks
-    inside each route handler.
+    Failure to initialise indicates that the application has not yet completed
+    startup or encountered a fatal initialisation error. Since the API itself
+    is reachable but cannot service requests, the appropriate response is
+    HTTP 503 Service Unavailable.
 
-    @throws HTTPException 503 if PatientManager has not been initialized.
+    @throws HTTPException
+            - 503 Service Unavailable if the PatientManager has not been
+              initialised.
 
-    @return The initialized PatientManager singleton instance.
+    @return Initialised PatientManager singleton.
     """
     if PM.patient_manager is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                'The Patient Manager has not been initialized. '
-                'The server may still be starting up or encountered an error '
-                'during initialization. Please try again shortly.'
+                'The patient management service is currently unavailable '
+                'because it has not finished initialising. '
+                'Please try again shortly.'
             )
         )
+
     return PM.patient_manager
 
 
@@ -149,53 +193,85 @@ def get_patient_manager() -> PatientManager:
     status_code=status.HTTP_200_OK,
     summary='Search and filter patients',
     description=(
-        'Returns a paginated list of patient records matching the given filter criteria. '
-        'All fields in the request body are optional — an empty body or omitted body '
-        'returns an unfiltered list of patients ordered by name. '
-        'Supports filtering by name prefix, age, active status, ABHA KYC presence, '
-        'medical conditions (with CHECKALL/CHECKANY semantics), and nested ABHA KYC attributes.'
+        'Returns a paginated collection of patients matching the supplied '
+        'search criteria. Omitting the request body performs an unfiltered '
+        'query using the default pagination parameters.'
     ),
     responses={
-        200: {'description': 'List of matching patient records returned successfully.'},
-        500: {'description': 'Internal database error while executing the search query.'}
+        200: {'description': 'Matching patient records returned successfully.'},
+        400: {'description': 'One or more business-rule validations failed.'},
+        503: {'description': 'Database service unavailable.'},
+        504: {'description': 'Database operation timed out.'},
+        500: {'description': 'Unexpected internal server error.'}
     }
 )
 async def getall(
     search_args: GetAllArgs | None = Body(
         default=None,
-        description='Search and filter parameters. All fields optional. Omit body entirely for unfiltered results.'
+        description=(
+            'Optional search and pagination arguments. '
+            'When omitted, default search parameters are used.'
+        )
     ),
     manager: PatientManager = Depends(get_patient_manager)
 ):
     """
-    @brief Searches the patient collection with optional filters and pagination.
+    @brief Searches the patient collection.
 
     @details
-    Accepts an optional GetAllArgs body. If the body is omitted or None,
-    defaults to an unfiltered paginated query using GetAllArgs defaults
-    (size=20, offset=0, all filters None). Unpacks the model into keyword
-    arguments for PatientManager.getall().
+    Delegates the search operation entirely to PatientManager.getall(),
+    translating VitaSync exceptions into the corresponding HTTP responses.
 
-    @param search_args Optional GetAllArgs body containing filter and pagination params.
-    @param manager     Injected PatientManager dependency.
+    @param search_args Optional search, filtering, and pagination arguments.
+    @param manager Injected PatientManager dependency.
 
-    @throws HTTPException 500 on database execution failure.
+    @throws HTTPException
+            - 400 if business-rule validation fails.
+            - 503 if the database is unavailable.
+            - 504 if the database operation times out.
+            - 500 for any other internal VitaSync failure.
 
-    @return A JSON array of patient records matching the given criteria,
-            serialized with camelCase aliases.
+    @return List of matching patients serialised using response aliases.
     """
     try:
         args = search_args or GetAllArgs()
         response = await manager.getall(**args.model_dump())
-        return [patient.model_dump(by_alias=True) for patient in response]
 
-    except VitaSyncPMDatabaseError as exc:
+        return [
+            patient.model_dump(by_alias=True)
+            for patient in response
+        ]
+
+    except VitaSyncInvalidInputsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        ) from exc
+
+    except (
+        VitaSyncDatabaseDisconnectedError,
+        VitaSyncDatabaseUnreachableError
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc)
+        ) from exc
+
+    except VitaSyncDatabaseTimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc)
+        ) from exc
+
+    except (
+        VitaSyncDatabaseOperationError,
+        VitaSyncDatabaseExecutionError,
+        VitaSyncValidationError,
+        VitaSyncDatabaseError
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=(
-                f'A database error occurred while searching for patients. '
-                f'Reason: {str(exc)}'
-            )
+            detail=str(exc)
         ) from exc
 
 
@@ -204,57 +280,61 @@ async def getall(
     status_code=status.HTTP_200_OK,
     summary='Resolve a patient PID from known identifiers',
     description=(
-        'Looks up and returns the Patient ID (PID) for a patient identified by one or more '
-        'known identifiers: mobile number, ABHA number, ABHA address, or ABHA-linked mobile number. '
-        'At least one identifier must be provided. Returns 404 if no patient matches.'
+        'Returns the Patient ID corresponding to one or more known patient '
+        'identifiers such as a mobile number or ABHA information.'
     ),
     responses={
-        200: {'description': 'PID resolved and returned successfully.'},
-        404: {'description': 'No patient found matching the provided identifiers.'},
-        500: {'description': 'Internal database error while resolving the PID.'}
+        200: {'description': 'Patient identifier resolved successfully.'},
+        404: {'description': 'No matching patient exists.'},
+        503: {'description': 'Database service unavailable.'},
+        504: {'description': 'Database operation timed out.'},
+        500: {'description': 'Unexpected internal server error.'}
     }
 )
 async def getpid(
     mobile_number: str | None = Query(
         default=None,
         alias='mobileNumber',
-        description="The patient's registered mobile number (e.g. +919876543210 or 09876543210)."
+        description="Patient's registered mobile number."
     ),
     abha_number: str | None = Query(
         default=None,
         alias='abhaNumber',
-        description="The patient's 14-digit ABHA number in format XX-XXXX-XXXX-XXXX."
+        description="Patient's ABHA number."
     ),
     abha_address: str | None = Query(
         default=None,
         alias='abhaAddress',
-        description="The patient's ABHA address ending in @abdm (e.g. priya.sharma@abdm)."
+        description="Patient's ABHA address."
     ),
     abha_mobile_number: str | None = Query(
         default=None,
         alias='abhaMobileNumber',
-        description="The mobile number linked to the patient's ABHA account, if different from their registered number."
+        description='Mobile number linked to the patient ABHA account.'
     ),
     manager: PatientManager = Depends(get_patient_manager)
 ):
     """
-    @brief Resolves a patient PID from one or more known external identifiers.
+    @brief Resolves a Patient ID using external identifiers.
 
     @details
-    Queries the patient collection using whichever identifiers are provided.
-    All parameters are optional but at least one should be supplied for a
-    meaningful query — providing none will likely return None and a 404.
+    Delegates identifier resolution to PatientManager.getpid(). If no matching
+    patient exists, the manager raises VitaSyncNotFoundError which is converted
+    into HTTP 404.
 
-    @param mobile_number      Patient's registered mobile number.
-    @param abha_number        Patient's ABHA number in hyphenated format.
-    @param abha_address       Patient's ABHA address ending in @abdm.
-    @param abha_mobile_number Mobile number linked to the patient's ABHA account.
-    @param manager            Injected PatientManager dependency.
+    @param mobile_number Registered patient mobile number.
+    @param abha_number Patient ABHA number.
+    @param abha_address Patient ABHA address.
+    @param abha_mobile_number Mobile number linked to the ABHA account.
+    @param manager Injected PatientManager dependency.
 
-    @throws HTTPException 404 if no patient matches the given identifiers.
-    @throws HTTPException 500 on database execution failure.
+    @throws HTTPException
+            - 404 if no matching patient exists.
+            - 503 if the database is unavailable.
+            - 504 if the database operation times out.
+            - 500 for all remaining internal failures.
 
-    @return A JSON object containing the resolved pid: {"pid": "PAT-YYMMDD-XXXXXX"}.
+    @return JSON object containing the resolved patient identifier.
     """
     try:
         response = await manager.getpid(
@@ -264,21 +344,40 @@ async def getpid(
             abha_mobile_number=abha_mobile_number
         )
 
-        if response is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    'No patient found matching the provided identifiers. '
-                    'Verify the mobile number, ABHA number, or ABHA address and try again.'
-                )
-            )
+        return {
+            'patientID': response
+        }
 
-        return {'patientID': response}
+    except VitaSyncNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc)
+        ) from exc
 
-    except VitaSyncPMDatabaseError as exc:
+    except (
+        VitaSyncDatabaseDisconnectedError,
+        VitaSyncDatabaseUnreachableError
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc)
+        ) from exc
+
+    except VitaSyncDatabaseTimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc)
+        ) from exc
+
+    except (
+        VitaSyncDatabaseOperationError,
+        VitaSyncDatabaseExecutionError,
+        VitaSyncValidationError,
+        VitaSyncDatabaseError
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'A database error occurred while resolving the patient PID. Reason: {str(exc)}'
+            detail=str(exc)
         ) from exc
 
 
@@ -287,75 +386,96 @@ async def getpid(
     status_code=status.HTTP_201_CREATED,
     summary='Register a new patient',
     description=(
-        'Creates and persists a new patient record. The Patient ID (PID) is auto-generated '
-        'by the server in the format PAT-YYMMDD-XXXXXX and does not need to be supplied. '
-        'ABHA KYC is not set at registration time — it is linked asynchronously via the '
-        'PATCH /patients/{patientID}/kyc endpoint after ABDM verification. '
-        'Returns the full created patient record including the generated PID.'
+        'Registers a new patient in the VitaSync system. '
+        'A unique Patient ID (PID) is generated automatically. '
+        'ABHA KYC information is not created during registration and must '
+        'be linked separately after successful ABDM verification.'
     ),
     responses={
-        201: {'description': 'Patient registered successfully. Returns the full patient record.'},
-        409: {'description': 'A patient with this mobile number already exists in the system.'},
-        422: {'description': 'Validation error — one or more input fields are invalid.'},
-        500: {'description': 'Internal server error during patient registration.'}
+        201: {'description': 'Patient registered successfully.'},
+        409: {'description': 'A unique field conflicts with an existing patient.'},
+        503: {'description': 'Database service unavailable.'},
+        504: {'description': 'Database operation timed out.'},
+        500: {'description': 'Unexpected internal server error.'}
     }
 )
 async def create(
     patient_create: PatientCreate = Body(
         ...,
-        description='Patient registration payload. PID and ABHA KYC are not required and will be ignored if provided.'
+        description='Validated patient registration payload.'
     ),
     max_retries: int = Query(
         default=5,
         ge=1,
         le=10,
         alias='maxRetries',
-        description='Maximum number of PID generation retry attempts on collision. Defaults to 5.'
+        description='Maximum number of PID generation retries.'
     ),
     manager: PatientManager = Depends(get_patient_manager)
 ):
     """
-    @brief Registers a new patient in the VitaSync system.
+    @brief Registers a new patient.
 
     @details
-    Passes the validated PatientCreate payload to PatientManager.create(),
-    which generates a unique PID, constructs the full Patient model,
-    runs all model validators, and persists the record to MongoDB.
+    Delegates patient creation entirely to PatientManager.create(). The
+    manager generates a unique Patient ID, validates the resulting Patient
+    model, and persists it to the database.
 
-    PID generation retries automatically on collision up to max_retries times.
-    If the mobile number already exists in the system, raises 409 immediately
-    without retrying since changing the PID would not resolve a mobile number conflict.
+    Duplicate unique fields are surfaced as HTTP 409, while infrastructure
+    failures are translated according to the VitaSync exception hierarchy.
 
-    @param patient_create The validated patient registration payload.
-    @param max_retries    Maximum PID generation retry attempts. Defaults to 5.
-    @param manager        Injected PatientManager dependency.
+    @param patient_create Validated patient registration payload.
+    @param max_retries Maximum PID generation retry attempts.
+    @param manager Injected PatientManager dependency.
 
-    @throws HTTPException 409 if the mobile number already exists.
-    @throws HTTPException 500 on unrecoverable database or manager error.
+    @throws HTTPException
+            - 409 if a unique constraint is violated.
+            - 503 if the database is unavailable.
+            - 504 if the database operation times out.
+            - 500 for all remaining internal failures.
 
-    @return The full created patient record serialized with camelCase aliases.
+    @return Newly created patient record.
     """
     try:
         response = await manager.create(
             patient_create=patient_create,
             max_retries=max_retries
         )
+
         return response.model_dump(by_alias=True)
 
     except VitaSyncDuplicateEntryError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f'A patient with this mobile number or ABHA identifier already exists. '
-                f'Use GET /patients/resolve to look up the existing patient PID. '
-                f'Reason: {str(exc)}'
-            )
+            detail=str(exc)
         ) from exc
 
-    except VitaSyncManagersBaseError as exc:
+    except (
+        VitaSyncDatabaseDisconnectedError,
+        VitaSyncDatabaseUnreachableError
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc)
+        ) from exc
+
+    except VitaSyncDatabaseTimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc)
+        ) from exc
+
+    except (
+        VitaSyncIDGenerationError,
+        VitaSyncDatabaseOperationError,
+        VitaSyncDatabaseExecutionError,
+        VitaSyncValidationError,
+        VitaSyncDatabaseError,
+        VitaSyncManagerError
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'An error occurred during patient registration. Reason: {str(exc)}'
+            detail=str(exc)
         ) from exc
 
 
@@ -366,40 +486,42 @@ async def create(
     status_code=status.HTTP_200_OK,
     summary='Fetch a patient by PID',
     description=(
-        'Retrieves the complete patient record for the given Patient ID (PID). '
-        'Returns all fields including ABHA KYC data if linked. '
-        'Returns 404 if no patient exists with the given PID.'
+        'Returns the complete patient record associated with the supplied '
+        'Patient ID.'
     ),
     responses={
-        200: {'description': 'Full patient record returned successfully.'},
-        404: {'description': 'No patient found with the given PID.'},
-        500: {'description': 'Internal database error while fetching the patient record.'}
+        200: {'description': 'Patient returned successfully.'},
+        404: {'description': 'Patient not found.'},
+        503: {'description': 'Database service unavailable.'},
+        504: {'description': 'Database operation timed out.'},
+        500: {'description': 'Unexpected internal server error.'}
     }
 )
 async def get(
     patientID: str = Path(
         ...,
-        description='The unique Patient ID in format PAT-YYMMDD-XXXXXX.',
+        description='Unique Patient ID.',
         examples=['PAT-260702-K7M2X9']
     ),
     manager: PatientManager = Depends(get_patient_manager)
 ):
     """
-    @brief Fetches the full patient record for a given PID.
+    @brief Returns a patient by Patient ID.
 
     @details
-    Delegates to PatientManager.get(), which queries the patient collection
-    by pid and reconstructs the full Patient Pydantic model from the
-    MongoDB document. Returns None if no document matches, which is
-    converted to a 404 response.
+    Delegates retrieval to PatientManager.get(). Missing patients are reported
+    by the manager using VitaSyncNotFoundError and translated into HTTP 404.
 
-    @param patientID The unique patient identifier in format PAT-YYMMDD-XXXXXX.
-    @param manager   Injected PatientManager dependency.
+    @param patientID Unique Patient ID.
+    @param manager Injected PatientManager dependency.
 
-    @throws HTTPException 404 if no patient exists with the given PID.
-    @throws HTTPException 500 on database execution failure.
+    @throws HTTPException
+            - 404 if the patient does not exist.
+            - 503 if the database is unavailable.
+            - 504 if the database operation times out.
+            - 500 for all remaining internal failures.
 
-    @return The full patient record serialized with camelCase aliases.
+    @return Complete patient record.
     """
     try:
         response = await manager.get(pid=patientID)
@@ -407,105 +529,121 @@ async def get(
         if response is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    f"No patient found with PID '{patientID}'. "
-                    f'Verify the PID and try again, or use GET /patients/resolve '
-                    f'to look up a PID from a mobile number or ABHA identifier.'
-                )
-            )
+                detail='Could not find required patient.'
+            ) 
 
-        return response.model_dump(by_alias=True)
+        return response.model_dump(by_alias=True) 
 
-    except VitaSyncPMDatabaseError as exc:
+    except (
+        VitaSyncDatabaseDisconnectedError,
+        VitaSyncDatabaseUnreachableError
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc)
+        ) from exc
+
+    except VitaSyncDatabaseTimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc)
+        ) from exc
+
+    except (
+        VitaSyncDatabaseOperationError,
+        VitaSyncDatabaseExecutionError,
+        VitaSyncValidationError,
+        VitaSyncDatabaseError
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'A database error occurred while fetching patient {patientID}. Reason: {str(exc)}'
+            detail=str(exc)
         ) from exc
 
 
 @router.get(
     '/{patientID}/fields',
     status_code=status.HTTP_200_OK,
-    summary='Fetch specific fields for a patient',
+    summary='Fetch selected patient fields',
     description=(
-        'Returns a projection of the patient record containing only the requested fields. '
-        'Use this endpoint instead of GET /{patientID} when only a subset of patient data '
-        'is needed, to reduce response payload size and database read overhead. '
-        'At minimum, the patient PID is always returned regardless of which fields are requested.'
+        'Returns only the requested fields for a patient record using a '
+        'database projection.'
     ),
     responses={
-        200: {'description': 'Projected patient fields returned successfully.'},
-        400: {'description': 'Invalid input — e.g. age parameter is less than or equal to zero.'},
-        404: {'description': 'No patient found with the given PID.'},
-        500: {'description': 'Internal database error while fetching patient fields.'}
+        200: {'description': 'Requested fields returned successfully.'},
+        400: {'description': 'Business-rule validation failed.'},
+        404: {'description': 'Patient not found.'},
+        503: {'description': 'Database service unavailable.'},
+        504: {'description': 'Database operation timed out.'},
+        500: {'description': 'Unexpected internal server error.'}
     }
 )
 async def getfields(
     patientID: str = Path(
         ...,
-        description='The unique Patient ID in format PAT-YYMMDD-XXXXXX.',
+        description='Unique Patient ID.',
         examples=['PAT-260702-K7M2X9']
     ),
     name: bool = Query(
         default=False,
-        description='Include the patient full name in the response.'
+        description='Include patient name.'
     ),
     mobile_number: bool = Query(
         default=False,
         alias='mobileNumber',
-        description='Include the patient registered mobile number in the response.'
+        description='Include registered mobile number.'
     ),
     date_of_birth: bool = Query(
         default=False,
         alias='dateOfBirth',
-        description='Include the patient date of birth in the response.'
+        description='Include date of birth.'
     ),
     conditions: bool = Query(
         default=False,
-        description='Include the patient medical conditions set in the response.'
+        description='Include medical conditions.'
     ),
     is_active: bool = Query(
         default=False,
         alias='isActive',
-        description='Include the patient active/inactive status in the response.'
+        description='Include active status.'
     ),
     abha_kyc: bool = Query(
         default=False,
         alias='abhaKYC',
-        description='Include the full ABHA KYC sub-document in the response if linked.'
+        description='Include ABHA KYC information.'
     ),
     created_on: bool = Query(
         default=False,
         alias='createdOn',
-        description='Include the patient record creation timestamp in the response.'
+        description='Include creation timestamp.'
     ),
     manager: PatientManager = Depends(get_patient_manager)
 ):
     """
-    @brief Returns a field projection of a patient record.
+    @brief Returns a projected patient document.
 
     @details
-    Fetches only the requested fields from the patient document via a MongoDB
-    projection query, avoiding the overhead of fetching the full document when
-    only a subset of fields is needed. The PID is always included in the response
-    regardless of which boolean flags are set.
+    Delegates projection to PatientManager.getfields(), allowing the manager
+    to determine which database fields should be retrieved.
 
-    @param patientID    The unique patient identifier.
-    @param name         Include patient name if True.
-    @param mobile_number Include registered mobile number if True.
-    @param date_of_birth Include date of birth if True.
-    @param conditions   Include medical conditions set if True.
-    @param is_active    Include active status if True.
-    @param abha_kyc     Include full ABHA KYC sub-document if True.
-    @param created_on   Include record creation timestamp if True.
-    @param manager      Injected PatientManager dependency.
+    @param patientID Unique Patient ID.
+    @param name Include patient name.
+    @param mobile_number Include registered mobile number.
+    @param date_of_birth Include date of birth.
+    @param conditions Include medical conditions.
+    @param is_active Include active status.
+    @param abha_kyc Include ABHA KYC information.
+    @param created_on Include creation timestamp.
+    @param manager Injected PatientManager dependency.
 
-    @throws HTTPException 400 on invalid input parameters.
-    @throws HTTPException 404 if no patient exists with the given PID.
-    @throws HTTPException 500 on database execution failure.
+    @throws HTTPException
+            - 400 if business-rule validation fails.
+            - 404 if the patient does not exist.
+            - 503 if the database is unavailable.
+            - 504 if the database operation times out.
+            - 500 for all remaining internal failures.
 
-    @return A partial patient record containing only the requested fields,
-            serialized with camelCase aliases.
+    @return Projected patient document.
     """
     try:
         response = await manager.getfields(
@@ -522,10 +660,7 @@ async def getfields(
         if response is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    f"No patient found with PID '{patientID}'. "
-                    f'Verify the PID and try again.'
-                )
+                detail='Could not find the required patient.'
             )
 
         return response.model_dump(by_alias=True)
@@ -533,13 +668,33 @@ async def getfields(
     except VitaSyncInvalidInputsError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid input provided to patient field projection query. Reason: {str(exc)}'
+            detail=str(exc)
         ) from exc
 
-    except VitaSyncPMDatabaseError as exc:
+    except (
+        VitaSyncDatabaseDisconnectedError,
+        VitaSyncDatabaseUnreachableError
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc)
+        ) from exc
+
+    except VitaSyncDatabaseTimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc)
+        ) from exc
+
+    except (
+        VitaSyncDatabaseOperationError,
+        VitaSyncDatabaseExecutionError,
+        VitaSyncValidationError,
+        VitaSyncDatabaseError
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'A database error occurred while fetching fields for patient {patientID}. Reason: {str(exc)}'
+            detail=str(exc)
         ) from exc
 
 
@@ -548,58 +703,90 @@ async def getfields(
     status_code=status.HTTP_200_OK,
     summary='Delete a patient record',
     description=(
-        'Permanently removes the patient record with the given PID from the system. '
-        'This action is irreversible. Associated visit records are not automatically '
-        'deleted and must be handled separately. '
-        'Returns 404 if no patient exists with the given PID.'
+        'Permanently removes the patient identified by the supplied Patient '
+        'ID from the system.'
     ),
     responses={
-        200: {'description': 'Patient record deleted successfully.'},
-        404: {'description': 'No patient found with the given PID.'},
-        500: {'description': 'Internal database error during deletion.'}
+        200: {'description': 'Patient deleted successfully.'},
+        400: {'description': 'Business-rule validation failed.'},
+        404: {'description': 'Patient not found.'},
+        503: {'description': 'Database service unavailable.'},
+        504: {'description': 'Database operation timed out.'},
+        500: {'description': 'Unexpected internal server error.'}
     }
 )
 async def delete(
     patientID: str = Path(
         ...,
-        description='The unique Patient ID of the record to permanently delete.',
+        description='Unique Patient ID.',
         examples=['PAT-260702-K7M2X9']
     ),
     manager: PatientManager = Depends(get_patient_manager)
 ):
     """
-    @brief Permanently deletes a patient record by PID.
+    @brief Permanently deletes a patient.
 
     @details
-    Delegates to PatientManager.delete(), which removes the patient document
-    from the MongoDB collection. Raises 404 if the PID does not match any
-    existing document. This operation is irreversible.
+    Delegates deletion entirely to PatientManager.delete(). The manager
+    validates the request, performs the deletion, and reports any failure
+    using the VitaSync exception hierarchy.
 
-    @param patientID The unique patient identifier of the record to delete.
-    @param manager   Injected PatientManager dependency.
+    @param patientID Unique Patient ID.
+    @param manager Injected PatientManager dependency.
 
-    @throws HTTPException 404 if no patient exists with the given PID.
-    @throws HTTPException 500 on database execution failure.
+    @throws HTTPException
+            - 400 if business-rule validation fails.
+            - 404 if the patient does not exist.
+            - 503 if the database is unavailable.
+            - 504 if the database operation times out.
+            - 500 for all remaining internal failures.
 
-    @return A JSON object confirming the deletion: {"patientID": "...", "deleted": true}.
+    @return Confirmation object indicating successful deletion.
     """
     try:
         await manager.delete(patientID)
+
         return {
             'patientID': patientID,
             'deleted': True
         }
 
-    except VitaSyncPMDatabaseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'A database error occurred while deleting patient {patientID}. Reason: {str(exc)}'
-        ) from exc
-
     except VitaSyncInvalidInputsError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid input provided to patient deletion. Reason: {str(exc)}'
+            detail=str(exc)
+        ) from exc
+
+    except VitaSyncNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc)
+        ) from exc
+
+    except (
+        VitaSyncDatabaseDisconnectedError,
+        VitaSyncDatabaseUnreachableError
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc)
+        ) from exc
+
+    except VitaSyncDatabaseTimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc)
+        ) from exc
+
+    except (
+        VitaSyncDatabaseOperationError,
+        VitaSyncDatabaseExecutionError,
+        VitaSyncValidationError,
+        VitaSyncDatabaseError
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc)
         ) from exc
 
 
@@ -608,57 +795,63 @@ async def delete(
     status_code=status.HTTP_200_OK,
     summary='Partially update a patient record',
     description=(
-        'Performs a partial update on the patient record identified by the given PID. '
-        'Only the fields included in the request body are updated — omitted fields '
-        'are left unchanged. Supports updating top-level demographic fields '
-        '(name, mobile number, date of birth, active status) as well as the '
-        'medical conditions set (append, remove, or replace). '
-        'ABHA KYC updates are handled separately via PATCH /patients/{patientID}/kyc.'
+        'Updates one or more fields of an existing patient record. '
+        'Only the fields supplied in the request body are modified.'
     ),
     responses={
-        200: {'description': 'Patient record updated successfully.'},
-        400: {'description': 'Invalid input — e.g. malformed field values.'},
-        404: {'description': 'No patient found with the given PID.'},
-        500: {'description': 'Internal database error during update.'}
+        200: {'description': 'Patient updated successfully.'},
+        400: {'description': 'Business-rule validation failed.'},
+        404: {'description': 'Patient not found.'},
+        409: {'description': 'Update violates a unique constraint.'},
+        503: {'description': 'Database service unavailable.'},
+        504: {'description': 'Database operation timed out.'},
+        500: {'description': 'Unexpected internal server error.'}
     }
 )
 async def update(
     patientID: str = Path(
         ...,
-        description='The unique Patient ID of the record to update.',
+        description='Unique Patient ID.',
         examples=['PAT-260702-K7M2X9']
     ),
     updateargs: UpdateArgs = Body(
         ...,
         description=(
-            'Partial update payload. All fields are optional — include only the fields '
-            'to be changed. For conditions, specify the update type (APPEND, REMOVE, or SET) '
-            'alongside the conditions set.'
+            'Partial update payload. Only supplied fields are modified.'
         )
     ),
     manager: PatientManager = Depends(get_patient_manager)
 ):
     """
-    @brief Partially updates a patient record by PID.
+    @brief Partially updates an existing patient.
 
     @details
-    Delegates to PatientManager.update(), passing the PID from the path
-    and the UpdateArgs payload. The manager constructs a sparse MongoDB
-    $set / $addToSet / $pullAll update document from only the non-None
-    fields in UpdateArgs, ensuring untouched fields are never overwritten.
+    Delegates update processing to PatientManager.update(), which applies
+    only the supplied fields while leaving all unspecified fields unchanged.
 
-    @param patientID  The unique patient identifier of the record to update.
-    @param updateargs Partial update payload containing only the fields to change.
-    @param manager    Injected PatientManager dependency.
+    Validation of business rules and construction of the underlying database
+    update operation are entirely the responsibility of the manager layer.
 
-    @throws HTTPException 400 on invalid input field values.
-    @throws HTTPException 404 if no patient exists with the given PID.
-    @throws HTTPException 500 on database execution failure.
+    @param patientID Unique Patient ID.
+    @param updateargs Partial update payload.
+    @param manager Injected PatientManager dependency.
 
-    @return A JSON object confirming the update: {"patientID": "...", "updated": true}.
+    @throws HTTPException
+            - 400 if business-rule validation fails.
+            - 404 if the patient does not exist.
+            - 409 if the update violates a unique database constraint.
+            - 503 if the database is unavailable.
+            - 504 if the database operation times out.
+            - 500 for all remaining internal failures.
+
+    @return Confirmation object indicating successful update.
     """
     try:
-        await manager.update(patientID, updateargs)
+        await manager.update(
+            patientID,
+            updateargs
+        )
+
         return {
             'patientID': patientID,
             'updated': True
@@ -667,11 +860,44 @@ async def update(
     except VitaSyncInvalidInputsError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid input provided to patient update. Reason: {str(exc)}'
+            detail=str(exc)
         ) from exc
 
-    except VitaSyncPMDatabaseError as exc:
+    except VitaSyncNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc)
+        ) from exc
+
+    except VitaSyncDuplicateEntryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc)
+        ) from exc
+
+    except (
+        VitaSyncDatabaseDisconnectedError,
+        VitaSyncDatabaseUnreachableError
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc)
+        ) from exc
+
+    except VitaSyncDatabaseTimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc)
+        ) from exc
+
+    except (
+        VitaSyncDatabaseOperationError,
+        VitaSyncDatabaseExecutionError,
+        VitaSyncValidationError,
+        VitaSyncDatabaseError
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'A database error occurred while updating patient {patientID}. Reason: {str(exc)}'
+            detail=str(exc)
         ) from exc
+        

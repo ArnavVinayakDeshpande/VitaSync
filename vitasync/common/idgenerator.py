@@ -151,6 +151,8 @@ class PatientID:
                 'Expected format: PAT-YYMMDD-XXXXXX (e.g. PAT-260702-K7M2X9).'
             )
 
+        pid = pid.strip()
+
         pattern = (
             fr'^PAT-(\d{{6}})-'
             fr'([{re.escape(PatientID.SAFE_CHARACTERS)}]{{{PatientID.RANDOM_PART_LENGTH}}})$'
@@ -181,3 +183,53 @@ class PatientID:
 
         return pid
         
+class VisitID:
+    RANDOM_PART_LENGTH: int = 4
+    SAFE_CHARACTERS: str = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+    @staticmethod
+    def generate(
+        pid: str,
+        timestamp_date: date
+    ) -> str:
+        PatientID.validate(pid)
+
+        pid_random_part = pid[-PatientID.RANDOM_PART_LENGTH:]
+        random_part = ''.join(
+            random.choices(
+                VisitID.SAFE_CHARACTERS,
+                k=VisitID.RANDOM_PART_LENGTH
+            )
+        )
+        date_part = timestamp_date.strftime('%y%m%d')
+
+        return f'VST-{pid_random_part}-{date_part}-{random_part}'
+
+    @staticmethod
+    def validate(vid: str) -> str:
+
+        if not vid:
+            raise ValueError('')
+
+        pattern = (
+            fr'^VST-'
+            fr'[{'|'.join(PatientID.SAFE_CHARACTERS)}]{{{PatientID.RANDOM_PART_LENGTH}}}-'
+            fr'(\d{{6}})-'
+            fr'[{'|'.join(VisitID.SAFE_CHARACTERS)}]{{{VisitID.RANDOM_PART_LENGTH}}}$'
+        )
+
+        matched = re.match(pattern, vid)
+
+        if not matched:
+            raise ValueError('')
+
+        date_str = matched.group(1)
+
+        try:
+            datetime.strptime(date_str, '%y%m%d')
+
+        except ValueError as exc:
+            raise ValueError('') from exc
+
+        return vid
+    

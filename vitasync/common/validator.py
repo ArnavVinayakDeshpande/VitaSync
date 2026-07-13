@@ -271,3 +271,5 @@ def validate_abha_address(v: str) -> str:
 
     return v
     
+def validate_hpr_id(v: str) -> str:
+    return v

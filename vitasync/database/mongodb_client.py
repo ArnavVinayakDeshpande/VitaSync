@@ -39,12 +39,13 @@ from motor.motor_asyncio import (
     AsyncIOMotorDatabase,
     AsyncIOMotorCollection
 )
-from pymongo.errors import PyMongoError
-
-from vitasync.exceptions.database import (
-    VitaSyncDatabaseDisconnectedError,
-    VitaSyncDatabaseExecutionError
+from pymongo.errors import (
+    ServerSelectionTimeoutError,
+    NetworkTimeout,
+    PyMongoError
 )
+
+from vitasync.common.error import *
 from vitasync.database.base import AsyncDatabaseClientBase
 
 
@@ -216,6 +217,12 @@ class AsyncMongoDBClient(AsyncDatabaseClientBase):
 
         try:
             await self._client.admin.command('ping')
+
+        except ServerSelectionTimeoutError as exc:
+            raise VitaSyncDatabaseUnreachableError(exc) from exc
+        
+        except NetworkTimeout as exc:
+            raise VitaSyncDatabaseTimeoutError(exc) from exc
 
         except PyMongoError as exc:
             raise VitaSyncDatabaseExecutionError(exc) from exc

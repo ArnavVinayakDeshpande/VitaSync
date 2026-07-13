@@ -62,13 +62,14 @@ from enum import StrEnum, auto
 import re
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo.errors import (
+    NetworkTimeout,
+    OperationFailure,
     PyMongoError,
     DuplicateKeyError
 )
 from datetime import datetime
 
-from vitasync.exceptions.database import *
-from vitasync.exceptions.generic import VitaSyncDataValidationError, VitaSyncInvalidInputsError
+from vitasync.common.error import *
 from vitasync.models.patient import (
     MedicalCondition,
     Patient
@@ -884,6 +885,7 @@ class PatientRepository:
                 'mobile_number',
                 unique=True
             )
+            
             await self._collection.create_index(
                 'abha_kyc.demographic_data.mobile_number',
                 unique=True,
@@ -903,6 +905,9 @@ class PatientRepository:
                 unique=True,
                 sparse=True
             )
+
+        except OperationFailure as exc:
+            raise VitaSyncDatabaseOperationError(exc) from exc
 
         except PyMongoError as exc:
             raise VitaSyncDatabaseExecutionError(exc) from exc
@@ -952,7 +957,10 @@ class PatientRepository:
             )
 
         except DuplicateKeyError as exc:
-            raise VitaSyncDuplicateEntryError() from exc
+            raise VitaSyncDuplicateEntryError('', exc) from exc # TODO Field
+
+        except OperationFailure as exc:
+            raise VitaSyncDatabaseOperationError(exc) from exc
 
         except PyMongoError as exc:
             raise VitaSyncDatabaseExecutionError(exc) from exc
@@ -991,6 +999,15 @@ class PatientRepository:
             raise VitaSyncDatabaseDisconnectedError()
 
         try:
+            PatientID.validate(pid)
+
+        except ValueError as exc:
+            raise VitaSyncInvalidInputsError(
+                ['PatientRepository::delete::pid'],
+                'PatientID does not fit the format expected.'
+            ) from exc
+
+        try:
             # Delete the patient record matching the supplied patient identifier.
             response = await self._collection.delete_one(
                 {
@@ -1000,7 +1017,10 @@ class PatientRepository:
 
             # Ensure that a matching patient record was found.
             if response.deleted_count == 0:
-                raise VitaSyncAbsentEntryError()
+                raise VitaSyncNotFoundError('Patient', pid)
+
+        except OperationFailure as exc:
+            raise VitaSyncDatabaseOperationError(exc) from exc
 
         except PyMongoError as exc:
             raise VitaSyncDatabaseExecutionError(exc) from exc
@@ -1122,8 +1142,8 @@ class PatientRepository:
         # Reject update requests that do not modify any fields.
         if not updater:
             raise VitaSyncInvalidInputsError(
-                ['updateargs'],
-                'No fields provided to update.'
+                ['PatientManager::update::updateargs'],
+                'UpdateArgs has all None fields, which is invalid.'
             )
 
         try:
@@ -1137,7 +1157,13 @@ class PatientRepository:
 
             # Ensure that a matching patient record exists.
             if response.matched_count == 0:
-                raise VitaSyncAbsentEntryError()
+                raise VitaSyncNotFoundError(
+                    'Patient',
+                    pid
+                )
+
+        except OperationFailure as exc:
+            raise VitaSyncDatabaseOperationError(exc) from exc
 
         except PyMongoError as exc:
             raise VitaSyncDatabaseExecutionError(exc) from exc
@@ -1183,9 +1209,16 @@ class PatientRepository:
         if not self._initialized:
             raise VitaSyncDatabaseDisconnectedError()
 
-        # Ignore empty patient identifiers.
-        if not pid:
-            return
+        try:
+            PatientID.validate(pid)
+
+        except ValueError as exc:
+            raise VitaSyncInvalidInputsError(
+                [
+                    'PatientRepository::get::pid'
+                ],
+                'PatientID does not fit the format expected.'
+            )
 
         try:
             # Retrieve the patient document matching the supplied identifier.
@@ -1200,7 +1233,10 @@ class PatientRepository:
                 return Patient(**response) if response is not None else None
 
             except ValidationError as exc:
-                raise VitaSyncDataValidationError(exc) from exc
+                raise VitaSyncValidationError(exc) from exc
+
+        except OperationFailure as exc:
+            raise VitaSyncDatabaseOperationError(exc) from exc
 
         except PyMongoError as exc:
             raise VitaSyncDatabaseExecutionError(exc) from exc
@@ -1277,8 +1313,17 @@ class PatientRepository:
             raise VitaSyncDatabaseDisconnectedError()
 
         # Ensure pagination parameters are non-negative.
-        size = size if size >= 0 else 0
-        offset = offset if offset >= 0 else 0
+        if size < 0:
+            raise VitaSyncInvalidInputsError(
+                ['PatientRepository::getall::size'],
+                'Size of data requested must be non-negative. Set it to zero for no pagination (default) or a positive integer for pagination.'
+            )
+
+        if offset < 0:
+            raise VitaSyncInvalidInputsError(
+                ['PatientRepository::getall::offset'],
+                'Offset of data requested must be non-negative. Set it to zero for no pagination offset (default) or a positive integer for pagination offset.'
+            )
 
         # Construct the MongoDB query document.
         query = {}
@@ -1293,8 +1338,8 @@ class PatientRepository:
 
             if date_range is None:  # age <= 0
                 raise VitaSyncInvalidInputsError(
-                    ['patient repository getall age'],
-                    'Age parameter given to PatientRepository::getall is lte 0.'
+                    ['PatientRepository::getall::age'],
+                    'Age of a patient must be greater than zero, given age is negative.'
                 )
 
             # Convert the calculated date range into datetime boundaries.
@@ -1376,7 +1421,10 @@ class PatientRepository:
                 ]
 
             except ValidationError as exc:
-                raise VitaSyncDataValidationError(exc) from exc
+                raise VitaSyncValidationError(exc) from exc
+
+        except OperationFailure as exc:
+            raise VitaSyncDatabaseOperationError(exc) from exc
 
         except PyMongoError as exc:
             raise VitaSyncDatabaseExecutionError(exc) from exc
@@ -1460,9 +1508,14 @@ class PatientRepository:
         if not self._initialized:
             raise VitaSyncDatabaseDisconnectedError()
 
-        # Ignore empty patient identifiers.
-        if not pid:
-            return
+        try:
+            PatientID.validate(pid)
+
+        except ValueError as exc:
+            raise VitaSyncInvalidInputsError(
+                ['PatientRepository::getfields::pid'],
+                'PatientID does not fit the format expected.'
+            )
 
         try:
             # Retrieve only the requested fields from the patient record.
@@ -1488,7 +1541,10 @@ class PatientRepository:
                 return GetFieldsResult(**response) if response is not None else None
 
             except ValidationError as exc:
-                raise VitaSyncDataValidationError(exc) from exc
+                raise VitaSyncValidationError(exc) from exc
+
+        except OperationFailure as exc:
+            raise VitaSyncDatabaseOperationError(exc) from exc
 
         except PyMongoError as exc:
             raise VitaSyncDatabaseExecutionError(exc) from exc
@@ -1525,6 +1581,8 @@ class PatientRepository:
         if not self._initialized:
             raise VitaSyncDatabaseDisconnectedError()
 
+        # TODO Validators
+
         # Ensure that at least one identifier has been supplied.
         if not (
             any(
@@ -1537,8 +1595,16 @@ class PatientRepository:
             )
         ):
             raise VitaSyncInvalidInputsError(
-                ['getpid'],
-                'Need atleast some sort of identifcation to fetch pid.'
+                [
+                    'PatientRepository::getpid::mobile_number',
+                    'PatientRepository::getpid::abha_number',
+                    'PatientRepository::getpid::abha_address',
+                    'PatientRepository::getpid::abha_mobile_number'
+                ],
+                (
+                    'Atleast one of the parameters is required to be not None.'
+                    'All given parameters are None.'
+                )
             )
 
         try:
@@ -1558,6 +1624,9 @@ class PatientRepository:
 
             # Return the matching patient identifier, if one exists.
             return response['pid'] if response is not None else None
+
+        except OperationFailure as exc:
+            raise VitaSyncDatabaseOperationError(exc) from exc
 
         except PyMongoError as exc:
             raise VitaSyncDatabaseExecutionError(exc) from exc
