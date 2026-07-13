@@ -117,7 +117,7 @@ class GetAllArgs(BaseModel):
         description='Case-insensitive prefix search on patient names.'
     )
 
-    condition_args: ConditionGetAllArgs | None = Field(
+    conditions: ConditionGetAllArgs | None = Field(
         default=None,
         validation_alias='conditionArgs',
         description=(
