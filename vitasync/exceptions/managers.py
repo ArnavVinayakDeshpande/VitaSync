@@ -53,3 +53,25 @@ class VitaSyncPMDatabaseError(VitaSyncManagersBaseError):
         """
         super().__init__(self._MESSAGE.format(exc=exc))
         
+
+class VitaSyncVMDatabaseError(VitaSyncManagersBaseError):
+    """
+    @brief Raised when a patient manager encounters a database error.
+
+    @details
+    Wraps database-layer exceptions so that callers interacting with the
+    manager layer need not depend directly on repository or database
+    exceptions.
+    """
+
+    _MESSAGE = 'Ran into database error: {exc}'
+
+    def __init__(self, exc: VitaSyncDatabaseBaseError) -> None:
+        """
+        @brief Constructs the exception.
+
+        @param exc
+            The underlying database exception.
+        """
+        super().__init__(self._MESSAGE.format(exc=exc))
+        

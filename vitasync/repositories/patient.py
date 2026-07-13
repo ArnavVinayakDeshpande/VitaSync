@@ -884,6 +884,7 @@ class PatientRepository:
                 'mobile_number',
                 unique=True
             )
+            
             await self._collection.create_index(
                 'abha_kyc.demographic_data.mobile_number',
                 unique=True,
