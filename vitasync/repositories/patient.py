@@ -1142,8 +1142,8 @@ class PatientRepository:
         # Reject update requests that do not modify any fields.
         if not updater:
             raise VitaSyncInvalidInputsError(
-                ['updateargs'],
-                'No fields provided to update.'
+                ['PatientManager::update::updateargs'],
+                'UpdateArgs has all None fields, which is invalid.'
             )
 
         try:

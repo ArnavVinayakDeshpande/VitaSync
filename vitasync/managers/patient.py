@@ -29,8 +29,7 @@ from vitasync.repositories.patient import (
     UpdateArgs,
     PatientRepository
 )
-from vitasync.exceptions.generic import VitaSyncDataValidationError, VitaSyncInvalidInputsError
-from vitasync.exceptions.database import VitaSyncDatabaseBaseError, VitaSyncDuplicateEntryError
+from vitasync.common.error import *
 from vitasync.common.idgenerator import PatientID
 from vitasync.models.patient import (
     Patient,
@@ -90,6 +89,12 @@ class PatientManager:
 
         # Repository responsible for patient persistence.
         self._repository = repository
+
+        if not self._repository.is_initialized:
+            raise VitaSyncInvalidInputsError(
+                ['PatientManager::init::repository'],
+                'PatientManager expects an already initialized repository, the repository given has not been initialized.'
+            )
 
     @property
     def repository(self) -> PatientRepository:
@@ -178,22 +183,17 @@ class PatientManager:
             #     raise VitaSyncInvalidInputsError(['patient::created_on'], f'created_on field in patient dict either does not exist or is not a valid datetime: {exc}.') from exc
 
             except ValidationError as exc:
-                raise VitaSyncDataValidationError(exc) from exc
+                raise VitaSyncValidationError(exc) from exc
 
             # Retry only when the generated patient identifier collides
             # with an existing record.
             except VitaSyncDuplicateEntryError as exc:
                 if i == max_retries - 1:
-                    raise VitaSyncPMDatabaseError(exc) from exc  # TODO Change database error to add pid duplication vs fields duplication
+                    raise exc from exc  # TODO Change database error to add pid duplication vs fields duplication
                 continue
 
-            # Translate repository-level database exceptions into manager
-            # exceptions.
-            except VitaSyncDatabaseBaseError as exc:
-                raise VitaSyncPMDatabaseError(exc) from exc
-
         # This point should only be reached if every retry attempt fails.
-        raise VitaSyncManagersBaseError(
+        raise VitaSyncManagerError(
             f'Unknown error occured, could not add patient even after retrying for: {max_retries}'
         )
 
@@ -273,22 +273,17 @@ class PatientManager:
             #     raise VitaSyncInvalidInputsError(['patient::created_on'], f'created_on field in patient dict either does not exist or is not a valid datetime: {exc}.') from exc
 
             except ValidationError as exc:
-                raise VitaSyncDataValidationError(exc) from exc
+                raise VitaSyncValidationError(exc) from exc
 
             # Retry only when the generated patient identifier collides
             # with an existing record.
             except VitaSyncDuplicateEntryError as exc:
                 if i == max_retries - 1:
-                    raise VitaSyncPMDatabaseError(exc) from exc  # TODO Change database error to add pid duplication vs fields duplication
+                    raise exc from exc  # TODO Change database error to add pid duplication vs fields duplication
                 continue
 
-            # Translate repository-level database exceptions into manager
-            # exceptions.
-            except VitaSyncDatabaseBaseError as exc:
-                raise VitaSyncPMDatabaseError(exc) from exc
-
         # This point should only be reached if every retry attempt fails.
-        raise VitaSyncManagersBaseError(
+        raise VitaSyncManagerError(
             f'Unknown error occured, could not add patient even after retrying for: {max_retries}'
         )
 
@@ -313,21 +308,7 @@ class PatientManager:
         @throws VitaSyncPMDatabaseError
             If a database-related error occurs while deleting the patient.
         """
-        try:
-            # Validate the patient identifier before performing the deletion.
-            PatientID.validate(pid)
-
-            # Delegate the deletion operation to the repository.
-            await self._repository.delete(pid)
-
-        except ValueError as exc:
-            raise VitaSyncInvalidInputsError(
-                ['pid'],
-                f'Tried to delete patient entry with invalid pid: {pid}'
-            ) from exc
-
-        except VitaSyncDatabaseBaseError as exc:
-            raise VitaSyncPMDatabaseError(exc) from exc
+        await self._repository.delete(pid)
 
     async def update(
         self,
@@ -353,15 +334,10 @@ class PatientManager:
         @throws VitaSyncPMDatabaseError
             If a database-related error occurs while updating the patient.
         """
-        try:
-            # Delegate the update operation to the repository.
-            await self._repository.update(
-                pid=pid,
-                updateargs=updateargs
-            )
-
-        except VitaSyncDatabaseBaseError as exc:
-            raise VitaSyncPMDatabaseError(exc) from exc
+        await self._repository.update(
+            pid=pid,
+            updateargs=updateargs
+        )
 
     async def get(self, pid: str) -> Patient | None:
         """
@@ -383,20 +359,7 @@ class PatientManager:
         @throws VitaSyncPMDatabaseError
             If a database-related error occurs while retrieving the patient.
         """
-        try:
-            # Validate the patient identifier before querying the repository.
-            PatientID.validate(pid)
-
-            return await self._repository.get(pid)
-
-        except ValueError as exc:
-            raise VitaSyncInvalidInputsError(
-                ['pid'],
-                f'Tried to fetch a patient with an invalid pid: {pid}'
-            ) from exc
-
-        except VitaSyncDatabaseBaseError as exc:
-            raise VitaSyncPMDatabaseError(exc) from exc
+        return await self._repository.get(pid)
 
     async def getall(
         self,
@@ -451,21 +414,16 @@ class PatientManager:
         @throws VitaSyncPMDatabaseError
             If a database-related error occurs while retrieving patients.
         """
-        try:
-            # Delegate the retrieval operation to the repository.
-            return await self._repository.getall(
-                size=size,
-                offset=offset,
-                name_search=name_search,
-                conditions=conditions,
-                is_active=is_active,
-                age=age,
-                abha_kyc_exists=abha_kyc_exists,
-                abha_kyc=abha_kyc
-            )
-
-        except VitaSyncDatabaseBaseError as exc:
-            raise VitaSyncPMDatabaseError(exc) from exc
+        return await self._repository.getall(
+            size=size,
+            offset=offset,
+            name_search=name_search,
+            conditions=conditions,
+            is_active=is_active,
+            age=age,
+            abha_kyc_exists=abha_kyc_exists,
+            abha_kyc=abha_kyc
+        )
 
     async def getfields(
         self,
@@ -529,29 +487,16 @@ class PatientManager:
             If a database-related error occurs while retrieving the
             requested fields.
         """
-        try:
-            # Validate the patient identifier before querying the repository.
-            PatientID.validate(pid)
-
-            return await self._repository.getfields(
-                pid=pid,
-                name=name,
-                mobile_number=mobile_number,
-                date_of_birth=date_of_birth,
-                conditions=conditions,
-                is_active=is_active,
-                abha_kyc=abha_kyc,
-                created_on=created_on
-            )
-
-        except ValueError as exc:
-            raise VitaSyncInvalidInputsError(
-                ['pid'],
-                f'Tried to fetch fields from a patient with an invalid pid: {pid}'
-            ) from exc
-
-        except VitaSyncDatabaseBaseError as exc:
-            raise VitaSyncPMDatabaseError(exc) from exc
+        return await self._repository.getfields(
+            pid=pid,
+            name=name,
+            mobile_number=mobile_number,
+            date_of_birth=date_of_birth,
+            conditions=conditions,
+            is_active=is_active,
+            abha_kyc=abha_kyc,
+            created_on=created_on
+        )
 
     async def getpid(
         self,
@@ -590,20 +535,12 @@ class PatientManager:
             If a database-related error occurs while retrieving the patient
             identifier.
         """
-        try:
-            # TODO validation of this shit
-
-            # Delegate the lookup operation to the repository.
-            return await self._repository.getpid(
-                mobile_number=mobile_number,
-                abha_number=abha_number,
-                abha_address=abha_address,
-                abha_mobile_number=abha_mobile_number
-            )
-
-        except VitaSyncDatabaseBaseError as exc:
-            raise VitaSyncPMDatabaseError(exc) from exc
-
+        return await self._repository.getpid(
+            mobile_number=mobile_number,
+            abha_number=abha_number,
+            abha_address=abha_address,
+            abha_mobile_number=abha_mobile_number
+        )
 
 # Global patient manager instance.
 #
