@@ -1412,7 +1412,7 @@ class PatientRepository:
                 )
                 .skip(offset)
                 .limit(size)
-            ).to_list()  # TODO figure out if you need some forced pagination to avoid massive list creation
+            ).to_list(length=None)  # TODO figure out if you need some forced pagination to avoid massive list creation
 
             try:
                 # Convert every MongoDB document into a validated Patient model.

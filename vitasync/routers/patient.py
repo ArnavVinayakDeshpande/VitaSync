@@ -145,7 +145,7 @@ class GetAllArgs(BaseModel):
         description='Filters patients by whether ABHA KYC information exists.'
     )
 
-    abha_kyc_args: ABHAKYCGetAllArgs | None = Field(
+    abha_kyc: ABHAKYCGetAllArgs | None = Field(
         default=None,
         validation_alias='abhaKYCArgs',
         description='Optional filters applied to nested ABHA KYC fields.'

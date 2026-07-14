@@ -42,7 +42,7 @@ from vitasync.database.mongodb_client import AsyncMongoDBClient
 from vitasync.database.mongodb_db import AsyncMongoDBDatabase
 from vitasync.managers.patient import PatientManager
 from vitasync.common.converter import concatenate_name
-from vitasync.exceptions.base import VitaSyncBaseError
+from vitasync.common.error import VitaSyncError
 
 
 load_dotenv()
@@ -573,7 +573,7 @@ async def main():
                     f'ABHA KYC: {"Yes" if response.abha_kyc else "No"}'
                 )
 
-            except VitaSyncBaseError as exc:
+            except VitaSyncError as exc:
                 failed_reasons.append(str(exc))
                 print(
                     f'{Color.RED}[SEED]{Color.RESET} '
