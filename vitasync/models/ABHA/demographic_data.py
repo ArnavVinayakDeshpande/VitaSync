@@ -24,7 +24,6 @@ from pydantic import (
     ConfigDict
 )
 
-from vitasync.exceptions.generic import *
 from vitasync.models.ABHA.gender import Gender
 
 
